@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Evolve Tracker</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0d0f0e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Evolve Tracker">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" href="icons/icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand"><span class="pulse-dot"></span>EVOLVE TRACKER</div>
+</header>
+
+<div id="app">
+
+  <!-- ============ DASHBOARD ============ -->
+  <section class="view" id="view-dashboard">
+    <div class="panel">
+      <div class="panel-title">État de la board</div>
+      <div class="battery-gauge-row">
+        <div class="battery-gauge-track"><div class="battery-gauge-fill" id="dash-battery-fill"></div></div>
+        <div class="battery-gauge-value" id="dash-battery-value">--%</div>
+      </div>
+      <div style="font-size:12px;color:var(--text-tertiary);margin-top:6px" id="dash-battery-sublabel">Aucune sortie enregistrée</div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label">Km totaux</div>
+        <div class="stat-value" id="dash-total-km">0<span class="unit">km</span></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Sorties</div>
+        <div class="stat-value" id="dash-total-trips">0</div>
+      </div>
+      <div class="stat-card accent-amber">
+        <div class="stat-label">Conso. moy.</div>
+        <div class="stat-value" id="dash-avg-consumption">--<span class="unit">%/km</span></div>
+      </div>
+      <div class="stat-card accent-green">
+        <div class="stat-label">Autonomie moy.</div>
+        <div class="stat-value" id="dash-avg-range">--<span class="unit">km/%</span></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Dernière sortie</div>
+      <div id="dash-last-trip"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Configuration active</div>
+      <div id="dash-current-wheel" class="detail-row"></div>
+    </div>
+  </section>
+
+  <!-- ============ STATS & GRAPHIQUES ============ -->
+  <section class="view" id="view-stats">
+    <div class="page-header"><h1>Stats & graphiques</h1></div>
+
+    <div class="period-selector" id="stats-period-selector"></div>
+    <div class="filter-panel" id="stats-custom-range">
+      <div class="filter-row">
+        <div class="form-group mb-0">
+          <label class="form-label">Du</label>
+          <input type="date" class="form-input" id="stats-range-start">
+        </div>
+        <div class="form-group mb-0">
+          <label class="form-label">Au</label>
+          <input type="date" class="form-input" id="stats-range-end">
+        </div>
+      </div>
+      <button class="btn btn-primary btn-block btn-sm" id="stats-apply-range">Appliquer</button>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label">Km période</div>
+        <div class="stat-value" id="stats-period-km">0<span class="unit">km</span></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Sorties</div>
+        <div class="stat-value" id="stats-period-trips">0</div>
+      </div>
+      <div class="stat-card accent-amber">
+        <div class="stat-label">Conso. moy.</div>
+        <div class="stat-value" id="stats-period-consumption">--<span class="unit">%/km</span></div>
+      </div>
+      <div class="stat-card accent-green">
+        <div class="stat-label">Distance / %</div>
+        <div class="stat-value" id="stats-period-range">--<span class="unit">km/%</span></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Kilométrage</div>
+      <div class="chart-container" id="chart-km"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Répartition par type de ride</div>
+      <div class="chart-container donut" id="chart-donut"></div>
+      <div class="chart-legend" id="chart-donut-legend"></div>
+    </div>
+  </section>
+
+  <!-- ============ CYCLES DE CHARGE ============ -->
+  <section class="view" id="view-charge">
+    <div class="page-header"><h1>Cycles de charge</h1></div>
+
+    <div class="period-selector" id="charge-period-selector"></div>
+    <div class="filter-panel" id="charge-custom-range">
+      <div class="filter-row">
+        <div class="form-group mb-0">
+          <label class="form-label">Du</label>
+          <input type="date" class="form-input" id="charge-range-start">
+        </div>
+        <div class="form-group mb-0">
+          <label class="form-label">Au</label>
+          <input type="date" class="form-input" id="charge-range-end">
+        </div>
+      </div>
+      <button class="btn btn-primary btn-block btn-sm" id="charge-apply-range">Appliquer</button>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label">Cycles</div>
+        <div class="stat-value" id="charge-count">0</div>
+      </div>
+      <div class="stat-card accent-green">
+        <div class="stat-label">% injecté total</div>
+        <div class="stat-value" id="charge-total-injected">0<span class="unit">%</span></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Fluctuation par cycle</div>
+      <div class="chart-container" id="chart-charge"></div>
+      <div class="chart-legend" id="chart-charge-legend"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Historique des cycles</div>
+      <div id="charge-list"></div>
+    </div>
+  </section>
+
+  <!-- ============ HISTORIQUE TRAJETS ============ -->
+  <section class="view" id="view-history">
+    <div class="page-header"><h1>Historique trajets</h1></div>
+
+    <div class="search-bar">
+      <svg viewBox="0 0 24 24"><path d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+      <input type="text" id="history-search" placeholder="Rechercher...">
+    </div>
+
+    <div class="toolbar-row">
+      <button class="btn btn-secondary btn-sm" id="history-sort-btn">Trier</button>
+      <button class="btn btn-secondary btn-sm" id="history-filter-btn">Filtrer</button>
+    </div>
+
+    <div class="filter-panel" id="history-sort-panel">
+      <div class="form-group">
+        <label class="form-label">Trier par</label>
+        <select class="form-select" id="history-sort-by">
+          <option value="date">Date</option>
+          <option value="distance">Distance</option>
+          <option value="consumption">Consommation batterie</option>
+          <option value="rideType">Type de ride</option>
+        </select>
+      </div>
+      <div class="segmented-control">
+        <button class="active" data-order="desc">Décroissant</button>
+        <button data-order="asc">Croissant</button>
+      </div>
+    </div>
+
+    <div class="filter-panel" id="history-filter-panel">
+      <div class="filter-row">
+        <div class="form-group mb-0">
+          <label class="form-label">Date début</label>
+          <input type="date" class="form-input" id="history-filter-date-start">
+        </div>
+        <div class="form-group mb-0">
+          <label class="form-label">Date fin</label>
+          <input type="date" class="form-input" id="history-filter-date-end">
+        </div>
+      </div>
+      <div class="filter-row">
+        <div class="form-group mb-0">
+          <label class="form-label">Distance min (km)</label>
+          <input type="number" class="form-input mono" id="history-filter-dist-min" step="0.1">
+        </div>
+        <div class="form-group mb-0">
+          <label class="form-label">Distance max (km)</label>
+          <input type="number" class="form-input mono" id="history-filter-dist-max" step="0.1">
+        </div>
+      </div>
+      <div class="filter-row">
+        <div class="form-group mb-0">
+          <label class="form-label">Conso min (%)</label>
+          <input type="number" class="form-input mono" id="history-filter-cons-min" step="0.1">
+        </div>
+        <div class="form-group mb-0">
+          <label class="form-label">Conso max (%)</label>
+          <input type="number" class="form-input mono" id="history-filter-cons-max" step="0.1">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Type de ride</label>
+        <select class="form-select" id="history-filter-ridetype">
+          <option value="">Tous</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary flex-1" id="history-filter-reset">Réinitialiser</button>
+        <button class="btn btn-primary flex-1" id="history-filter-apply">Appliquer</button>
+      </div>
+    </div>
+
+    <div id="history-list"></div>
+  </section>
+
+  <!-- ============ ENTRETIEN / INTERVENTIONS ============ -->
+  <section class="view" id="view-maintenance">
+    <div class="page-header"><h1>Entretien & remplacement</h1></div>
+
+    <div class="search-bar">
+      <svg viewBox="0 0 24 24"><path d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+      <input type="text" id="maintenance-search" placeholder="Rechercher (pièce, budget, mot-clé...)">
+    </div>
+
+    <div class="toolbar-row">
+      <button class="btn btn-secondary btn-sm" id="maintenance-sort-btn">Trier</button>
+      <button class="btn btn-primary btn-sm flex-1" id="maintenance-add-btn">+ Nouvelle intervention</button>
+    </div>
+
+    <div class="filter-panel" id="maintenance-sort-panel">
+      <div class="form-group">
+        <label class="form-label">Trier par</label>
+        <select class="form-select" id="maintenance-sort-by">
+          <option value="date">Date</option>
+          <option value="budget">Budget</option>
+          <option value="partsCount">Nombre de parties</option>
+        </select>
+      </div>
+      <div class="segmented-control">
+        <button class="active" data-order="desc">Décroissant</button>
+        <button data-order="asc">Croissant</button>
+      </div>
+    </div>
+
+    <div id="maintenance-list"></div>
+  </section>
+
+  <!-- ============ PARAMÈTRES ============ -->
+  <section class="view" id="view-settings">
+    <div class="page-header"><h1>Paramètres</h1></div>
+
+    <div class="settings-section">
+      <div class="panel-title">Roues</div>
+      <div class="panel" id="settings-wheels-list"></div>
+      <button class="btn btn-secondary btn-block" id="settings-add-wheel">+ Ajouter une roue</button>
+    </div>
+
+    <div class="settings-section">
+      <div class="panel-title">Types de ride</div>
+      <div class="panel" id="settings-ridetypes-list"></div>
+      <button class="btn btn-secondary btn-block" id="settings-add-ridetype">+ Ajouter un type de ride</button>
+    </div>
+
+    <div class="settings-section">
+      <div class="panel-title">Types d'intervention</div>
+      <div class="panel" id="settings-interventiontypes-list"></div>
+      <button class="btn btn-secondary btn-block" id="settings-add-interventiontype">+ Ajouter un type d'intervention</button>
+    </div>
+
+    <div class="settings-section">
+      <div class="panel-title">Parties du skate</div>
+      <div class="panel" id="settings-parts-list"></div>
+      <button class="btn btn-secondary btn-block" id="settings-add-part">+ Ajouter une partie</button>
+    </div>
+
+    <div class="settings-section">
+      <div class="panel-title">Données</div>
+      <div class="panel">
+        <button class="btn btn-secondary btn-block mt-8" id="settings-export-csv">Exporter trajets en CSV</button>
+        <button class="btn btn-secondary btn-block mt-8" id="settings-export-csv-maintenance">Exporter interventions en CSV</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- FAB saisie rapide -->
+<button class="fab" id="fab-new-trip" aria-label="Nouvelle sortie">
+  <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+</button>
+
+<!-- Bottom nav -->
+<nav class="bottom-nav">
+  <button class="nav-item active" data-view="dashboard">
+    <svg viewBox="0 0 24 24"><path d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h12a1 1 0 001-1V10" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Dashboard
+  </button>
+  <button class="nav-item" data-view="stats">
+    <svg viewBox="0 0 24 24"><path d="M3 3v18h18M7 16l4-5 3 3 5-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Stats
+  </button>
+  <button class="nav-item" data-view="charge">
+    <svg viewBox="0 0 24 24"><path d="M13 2L4.5 13H11l-1 9 8.5-11H12l1-9z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Charge
+  </button>
+  <button class="nav-item" data-view="history">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Historique
+  </button>
+  <button class="nav-item" data-view="maintenance">
+    <svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.1-3.1a4 4 0 11-5.1 5.1L6.3 20.7a1.5 1.5 0 11-2.1-2.1L13.6 8.2a4 4 0 010-5.1 4 4 0 011.1-.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Entretien
+  </button>
+  <button class="nav-item" data-view="settings">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33h0a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51h0a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82h0a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Réglages
+  </button>
+</nav>
+
+<!-- Modal overlay générique (saisie trajet, intervention, etc.) -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal-sheet" id="modal-sheet"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/db.js"></script>
+<script src="js/calc.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/trips.js"></script>
+<script src="js/maintenance.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
