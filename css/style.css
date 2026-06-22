@@ -58,7 +58,11 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  padding-bottom: calc(72px + var(--safe-bottom));
+  /* 72px = hauteur de la barre de nav. Le FAB central dépasse d'environ 28px
+     au-dessus de cette barre (taille 54px, remonté de 16px, plus marge de confort),
+     donc le padding doit couvrir la barre ET le sommet du bouton, sinon le dernier
+     élément scrollable reste caché derrière le FAB plutôt que de s'arrêter au-dessus. */
+  padding-bottom: calc(72px + 30px + var(--safe-bottom));
 }
 
 #app {
