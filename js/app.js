@@ -390,6 +390,8 @@ function debounce(fn, delay) {
 
 // --- Service worker (PWA offline + détection de mise à jour) ---
 let newServiceWorker = null;
+let updateCheckIntervalId = null;
+const UPDATE_CHECK_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
 
 function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
@@ -409,6 +411,23 @@ function registerServiceWorker() {
           showUpdateBanner();
         }
       });
+    });
+
+    // Revérifie périodiquement tant que l'app reste ouverte, sans recharger la page.
+    // registration.update() compare sw.js avec la version servie par le réseau ;
+    // si différent, ça relance le cycle normal (-> updatefound -> bandeau).
+    if (!updateCheckIntervalId) {
+      updateCheckIntervalId = setInterval(() => {
+        registration.update().catch(() => {});
+      }, UPDATE_CHECK_INTERVAL_MS);
+    }
+
+    // Vérification immédiate si l'app revient au premier plan après avoir été masquée,
+    // pour ne pas attendre jusqu'à 10 minutes après un retour d'arrière-plan.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        registration.update().catch(() => {});
+      }
     });
   }).catch(() => {
     // Echec silencieux si non supporté dans l'environnement de preview
