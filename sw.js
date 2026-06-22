@@ -1,8 +1,10 @@
 // ============================================================
-// EVOLVE TRACKER - Service Worker (cache offline)
+// EVOLVE TRACKER - Service Worker (cache offline + mises à jour)
 // ============================================================
 
-const CACHE_NAME = 'evolve-tracker-v1';
+const CACHE_VERSION = 'v2';
+const CACHE_NAME = 'evolve-tracker-' + CACHE_VERSION;
+
 const ASSETS = [
   './index.html',
   './manifest.json',
@@ -10,17 +12,22 @@ const ASSETS = [
   './js/db.js',
   './js/calc.js',
   './js/charts.js',
+  './js/i18n.js',
   './js/trips.js',
   './js/maintenance.js',
   './js/settings.js',
+  './js/csv-io.js',
   './js/app.js'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)).catch(() => {})
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(ASSETS))
+      .catch(() => {})
   );
-  self.skipWaiting();
+  // Ne PAS appeler skipWaiting ici : on attend le signal explicite de l'utilisateur
+  // (bouton "Redémarrer") pour activer la nouvelle version. Voir message 'SKIP_WAITING'.
 });
 
 self.addEventListener('activate', (event) => {
@@ -32,18 +39,51 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+// Message envoyé par l'app quand l'utilisateur clique "Redémarrer"
+self.addEventListener('message', (event) => {
+  if (event.data === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).then((response) => {
-        if (response.ok && event.request.url.startsWith(self.location.origin)) {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
-        }
-        return response;
-      }).catch(() => cached);
-    })
-  );
+  if (!event.request.url.startsWith(self.location.origin)) return;
+
+  const isHTML = event.request.mode === 'navigate' || event.request.url.endsWith('.html') || event.request.url.endsWith('/');
+
+  if (isHTML) {
+    // Network-first pour le HTML : garantit qu'on a toujours un document valide,
+    // et qu'on détecte vite une nouvelle version. Fallback cache si offline.
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response && response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() =>
+          caches.match(event.request).then((cached) => cached || caches.match('./index.html'))
+        )
+    );
+  } else {
+    // Cache-first pour les assets statiques (CSS/JS/icônes) : rapide, peu volatil.
+    // Mise à jour silencieuse en arrière-plan à chaque requête (stale-while-revalidate).
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        const networkFetch = fetch(event.request)
+          .then((response) => {
+            if (response && response.ok) {
+              const clone = response.clone();
+              caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+            }
+            return response;
+          })
+          .catch(() => cached);
+        return cached || networkFetch;
+      })
+    );
+  }
 });

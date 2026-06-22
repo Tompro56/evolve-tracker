@@ -3,7 +3,7 @@
 // ============================================================
 
 const DB_NAME = 'EvolveTrackerDB';
-const DB_VERSION = 1;
+const DB_VERSION = 3; // v2 : champ uuid. v3 : store ride en cours (RIDE_IN_PROGRESS)
 
 const STORES = {
   TRIPS: 'trips',
@@ -12,7 +12,8 @@ const STORES = {
   INTERVENTIONS: 'interventions',
   RIDE_TYPES: 'rideTypes',
   INTERVENTION_TYPES: 'interventionTypes',
-  SETTINGS: 'settings'
+  SETTINGS: 'settings',
+  RIDE_IN_PROGRESS: 'rideInProgress'
 };
 
 let dbInstance = null;
@@ -31,6 +32,12 @@ function openDB() {
         const tripsStore = db.createObjectStore(STORES.TRIPS, { keyPath: 'id', autoIncrement: true });
         tripsStore.createIndex('timestamp', 'timestamp', { unique: false });
         tripsStore.createIndex('rideType', 'rideType', { unique: false });
+        tripsStore.createIndex('uuid', 'uuid', { unique: true });
+      } else if (event.oldVersion < 2) {
+        const tripsStore = event.target.transaction.objectStore(STORES.TRIPS);
+        if (!tripsStore.indexNames.contains('uuid')) {
+          tripsStore.createIndex('uuid', 'uuid', { unique: true });
+        }
       }
 
       // Roues (CRUD)
@@ -47,6 +54,12 @@ function openDB() {
       if (!db.objectStoreNames.contains(STORES.INTERVENTIONS)) {
         const interventionsStore = db.createObjectStore(STORES.INTERVENTIONS, { keyPath: 'id', autoIncrement: true });
         interventionsStore.createIndex('timestamp', 'timestamp', { unique: false });
+        interventionsStore.createIndex('uuid', 'uuid', { unique: true });
+      } else if (event.oldVersion < 2) {
+        const interventionsStore = event.target.transaction.objectStore(STORES.INTERVENTIONS);
+        if (!interventionsStore.indexNames.contains('uuid')) {
+          interventionsStore.createIndex('uuid', 'uuid', { unique: true });
+        }
       }
 
       // Types de ride (paramétrable)
@@ -62,6 +75,11 @@ function openDB() {
       // Paramètres généraux (clé/valeur)
       if (!db.objectStoreNames.contains(STORES.SETTINGS)) {
         db.createObjectStore(STORES.SETTINGS, { keyPath: 'key' });
+      }
+
+      // Ride en cours (un seul à la fois, clé fixe)
+      if (!db.objectStoreNames.contains(STORES.RIDE_IN_PROGRESS)) {
+        db.createObjectStore(STORES.RIDE_IN_PROGRESS, { keyPath: 'key' });
       }
     };
 
@@ -144,6 +162,33 @@ async function dbClear(storeName) {
   });
 }
 
+// --- Génération UUID ---
+function generateUUID() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback pour navigateurs/webviews plus anciens
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+// --- Migration : attribue un UUID à toute donnée existante qui n'en a pas ---
+// S'exécute une fois après l'ouverture de la base, ne touche pas aux données déjà migrées.
+async function migrateUUIDs() {
+  for (const storeName of [STORES.TRIPS, STORES.INTERVENTIONS]) {
+    const items = await dbGetAll(storeName);
+    for (const item of items) {
+      if (!item.uuid) {
+        item.uuid = generateUUID();
+        await dbPut(storeName, item);
+      }
+    }
+  }
+}
+
 // --- Initialisation des données par défaut ---
 
 async function initDefaultData() {
@@ -201,5 +246,7 @@ window.EvolveDB = {
   dbGetAll,
   dbDelete,
   dbClear,
-  initDefaultData
+  initDefaultData,
+  generateUUID,
+  migrateUUIDs
 };

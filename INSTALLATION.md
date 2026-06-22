@@ -33,6 +33,18 @@ Les données vivent dans IndexedDB, isolé du cache navigateur classique. Un net
 
 Pour une sécurité supplémentaire, exporte régulièrement en CSV (page Paramètres) et garde une copie ailleurs (Drive, mail).
 
+## Mises à jour de l'app
+
+Après un push sur GitHub, chaque téléphone qui ouvre l'app détecte la nouvelle version en arrière-plan. Un bandeau apparaît en haut de l'écran avec un bouton "Redémarrer". Au clic, la nouvelle version s'active et la page se recharge. Les données IndexedDB ne sont jamais affectées par une mise à jour.
+
+## Bandeau d'installation
+
+À la première visite via l'URL (avant installation), un bandeau propose d'installer l'app directement. Il peut être refermé sans installer ; il réapparaîtra aux prochaines visites tant que l'app n'est pas installée.
+
+## Mode "Démarrer un ride"
+
+Le bouton + central propose deux options : démarrer un ride (juste la batterie de départ, à compléter au retour) ou enregistrer un ride complet directement. Un seul ride peut être en attente à la fois ; un indicateur apparaît sur le dashboard tant qu'il n'est pas complété.
+
 ## Première utilisation
 
 Les roues, types de ride, types d'intervention et parties du skate sont déjà pré-remplis avec des valeurs par défaut cohérentes (tes 3 profils de roues, cruise/vitesse, etc.). Tu peux tout modifier depuis Paramètres.

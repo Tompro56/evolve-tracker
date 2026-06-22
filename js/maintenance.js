@@ -160,9 +160,12 @@ async function saveInterventionForm(interventionId) {
 
   if (interventionId) {
     data.id = interventionId;
+    const existing = await EvolveDB.dbGet(EvolveDB.STORES.INTERVENTIONS, interventionId);
+    data.uuid = existing && existing.uuid ? existing.uuid : EvolveDB.generateUUID();
     await EvolveDB.dbPut(EvolveDB.STORES.INTERVENTIONS, data);
     showToast('Intervention modifiée', 'success');
   } else {
+    data.uuid = EvolveDB.generateUUID();
     await EvolveDB.dbAdd(EvolveDB.STORES.INTERVENTIONS, data);
     showToast('Intervention enregistrée', 'success');
   }

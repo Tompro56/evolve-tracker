@@ -11,27 +11,120 @@ let currentStatsCustomRange = null;
 let currentChargePeriod = 'total';
 let currentChargeCustomRange = null;
 
-// --- Formulaire de saisie / édition d'un trajet ---
-Trips.openTripForm = async function (tripId = null) {
+// ============================================================
+// RIDE EN COURS (démarré sans complétion immédiate)
+// ============================================================
+const RIDE_IN_PROGRESS_KEY = 'current';
+
+Trips.getRideInProgress = async function () {
+  try {
+    return await EvolveDB.dbGet(EvolveDB.STORES.RIDE_IN_PROGRESS, RIDE_IN_PROGRESS_KEY);
+  } catch (e) {
+    return null;
+  }
+};
+
+Trips.saveRideInProgress = async function (data) {
+  data.key = RIDE_IN_PROGRESS_KEY;
+  await EvolveDB.dbPut(EvolveDB.STORES.RIDE_IN_PROGRESS, data);
+};
+
+Trips.clearRideInProgress = async function () {
+  await EvolveDB.dbDelete(EvolveDB.STORES.RIDE_IN_PROGRESS, RIDE_IN_PROGRESS_KEY);
+};
+
+// --- Formulaire "Démarrer un ride" : ne demande que la batterie de départ (+ options) ---
+Trips.openStartRideForm = async function () {
   const wheels = await EvolveDB.dbGetAll(EvolveDB.STORES.WHEELS);
   const rideTypes = await EvolveDB.dbGetAll(EvolveDB.STORES.RIDE_TYPES);
-  let trip = null;
-  if (tripId) trip = await EvolveDB.dbGet(EvolveDB.STORES.TRIPS, tripId);
-
   const defaultWheel = wheels.find(w => w.isDefault) || wheels[0];
-  const selectedWheelId = trip ? trip.wheelId : (defaultWheel ? defaultWheel.id : null);
 
   const sheet = document.getElementById('modal-sheet');
   sheet.innerHTML = `
     <div class="modal-header">
-      <h2>${trip ? 'Modifier la sortie' : 'Nouvelle sortie'}</h2>
-      <button class="modal-close" id="trip-form-close"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+      <h2>Démarrer un ride</h2>
+      <button class="modal-close" id="start-ride-close"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
     </div>
 
     <div class="form-group">
       <label class="form-label">Batterie au départ</label>
       <div class="input-with-unit">
-        <input type="number" class="form-input mono" id="trip-battery-start" min="0" max="100" step="0.1" value="${trip ? trip.batteryStart : ''}" placeholder="ex: 85">
+        <input type="number" class="form-input mono" id="start-battery" min="0" max="100" step="0.1" placeholder="ex: 85" autofocus>
+        <span class="unit-suffix">%</span>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Type de ride (optionnel, modifiable à la complétion)</label>
+      <select class="form-select" id="start-ridetype">
+        ${rideTypes.map(rt => `<option value="${rt.name}">${rt.name}</option>`).join('')}
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Roue (optionnel, modifiable à la complétion)</label>
+      <select class="form-select" id="start-wheel">
+        ${wheels.map(w => `<option value="${w.id}" ${defaultWheel && defaultWheel.id === w.id ? 'selected' : ''}>${w.diameter}mm · ${w.characteristic}${w.offroad ? ' (tout terrain)' : ''}</option>`).join('')}
+      </select>
+    </div>
+
+    <div style="font-size:12.5px;color:var(--text-tertiary);margin-bottom:16px">L'heure de départ est enregistrée automatiquement. Tu complèteras l'arrivée et la distance au retour.</div>
+
+    <div class="modal-actions">
+      <button class="btn btn-primary flex-1" id="start-ride-save-btn">Démarrer</button>
+    </div>
+  `;
+
+  document.getElementById('start-ride-close').onclick = closeModal;
+  document.getElementById('start-ride-save-btn').onclick = async () => {
+    const batteryStart = parseFloat(document.getElementById('start-battery').value);
+    if (isNaN(batteryStart) || batteryStart < 0 || batteryStart > 100) {
+      showToast('Indique une batterie de départ valide (0 à 100%).', 'error');
+      return;
+    }
+    const rideType = document.getElementById('start-ridetype').value;
+    const wheelId = parseInt(document.getElementById('start-wheel').value);
+    const startTimestamp = new Date().toISOString();
+
+    await Trips.saveRideInProgress({ batteryStart, rideType, wheelId, startTimestamp });
+    closeModal();
+    showToast('Ride démarré. Termine-le au retour.', 'success');
+    if (window.refreshFabLabel) await window.refreshFabLabel();
+  };
+
+  openModal();
+};
+
+// --- Formulaire de saisie / édition d'un trajet ---
+// options.completingRideInProgress : true si on complète un ride démarré précédemment
+Trips.openTripForm = async function (tripId = null, options = {}) {
+  const wheels = await EvolveDB.dbGetAll(EvolveDB.STORES.WHEELS);
+  const rideTypes = await EvolveDB.dbGetAll(EvolveDB.STORES.RIDE_TYPES);
+  let trip = null;
+  if (tripId) trip = await EvolveDB.dbGet(EvolveDB.STORES.TRIPS, tripId);
+
+  let rideInProgress = null;
+  if (options.completingRideInProgress) {
+    rideInProgress = await Trips.getRideInProgress();
+  }
+
+  const defaultWheel = wheels.find(w => w.isDefault) || wheels[0];
+  const prefilledBatteryStart = rideInProgress ? rideInProgress.batteryStart : (trip ? trip.batteryStart : '');
+  const prefilledRideType = rideInProgress ? rideInProgress.rideType : (trip ? trip.rideType : null);
+  const prefilledWheelId = rideInProgress ? rideInProgress.wheelId : (trip ? trip.wheelId : (defaultWheel ? defaultWheel.id : null));
+  const batteryStartLocked = !!rideInProgress;
+
+  const sheet = document.getElementById('modal-sheet');
+  sheet.innerHTML = `
+    <div class="modal-header">
+      <h2>${rideInProgress ? 'Terminer le ride' : (trip ? 'Modifier la sortie' : 'Nouvelle sortie')}</h2>
+      <button class="modal-close" id="trip-form-close"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Batterie au départ${batteryStartLocked ? ' (verrouillée, ride démarré)' : ''}</label>
+      <div class="input-with-unit">
+        <input type="number" class="form-input mono" id="trip-battery-start" min="0" max="100" step="0.1" value="${prefilledBatteryStart}" placeholder="ex: 85" ${batteryStartLocked ? 'readonly style="opacity:0.65"' : ''}>
         <span class="unit-suffix">%</span>
       </div>
     </div>
@@ -39,7 +132,7 @@ Trips.openTripForm = async function (tripId = null) {
     <div class="form-group">
       <label class="form-label">Batterie à l'arrivée</label>
       <div class="input-with-unit">
-        <input type="number" class="form-input mono" id="trip-battery-end" min="0" max="100" step="0.1" value="${trip ? trip.batteryEnd : ''}" placeholder="ex: 62">
+        <input type="number" class="form-input mono" id="trip-battery-end" min="0" max="100" step="0.1" value="${trip ? trip.batteryEnd : ''}" placeholder="ex: 62" autofocus>
         <span class="unit-suffix">%</span>
       </div>
     </div>
@@ -55,14 +148,14 @@ Trips.openTripForm = async function (tripId = null) {
     <div class="form-group">
       <label class="form-label">Type de ride</label>
       <select class="form-select" id="trip-ridetype">
-        ${rideTypes.map(rt => `<option value="${rt.name}" ${trip && trip.rideType === rt.name ? 'selected' : ''}>${rt.name}</option>`).join('')}
+        ${rideTypes.map(rt => `<option value="${rt.name}" ${prefilledRideType === rt.name ? 'selected' : ''}>${rt.name}</option>`).join('')}
       </select>
     </div>
 
     <div class="form-group">
       <label class="form-label">Roue utilisée</label>
       <select class="form-select" id="trip-wheel">
-        ${wheels.map(w => `<option value="${w.id}" ${selectedWheelId === w.id ? 'selected' : ''}>${w.diameter}mm · ${w.characteristic}${w.offroad ? ' (tout terrain)' : ''}</option>`).join('')}
+        ${wheels.map(w => `<option value="${w.id}" ${prefilledWheelId === w.id ? 'selected' : ''}>${w.diameter}mm · ${w.characteristic}${w.offroad ? ' (tout terrain)' : ''}</option>`).join('')}
       </select>
     </div>
 
@@ -80,7 +173,7 @@ Trips.openTripForm = async function (tripId = null) {
   `;
 
   document.getElementById('trip-form-close').onclick = closeModal;
-  document.getElementById('trip-save-btn').onclick = () => saveTripForm(tripId);
+  document.getElementById('trip-save-btn').onclick = () => saveTripForm(tripId, { completingRideInProgress: options.completingRideInProgress });
   if (trip) {
     document.getElementById('trip-delete-btn').onclick = async () => {
       if (confirm('Supprimer cette sortie ?')) {
@@ -101,7 +194,7 @@ function toDatetimeLocal(isoString) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-async function saveTripForm(tripId) {
+async function saveTripForm(tripId, options = {}) {
   const batteryStart = parseFloat(document.getElementById('trip-battery-start').value);
   const batteryEnd = parseFloat(document.getElementById('trip-battery-end').value);
   const distanceKm = parseFloat(document.getElementById('trip-distance').value);
@@ -119,8 +212,16 @@ async function saveTripForm(tripId) {
 
   let timestamp;
   const tsInput = document.getElementById('trip-timestamp');
+  let rideInProgress = null;
+  if (options.completingRideInProgress) {
+    rideInProgress = await Trips.getRideInProgress();
+  }
+
   if (tsInput) {
     timestamp = new Date(tsInput.value).toISOString();
+  } else if (rideInProgress && rideInProgress.startTimestamp) {
+    // On garde l'heure de départ réelle du ride démarré, pas l'heure de complétion
+    timestamp = rideInProgress.startTimestamp;
   } else {
     timestamp = new Date().toISOString();
   }
@@ -129,11 +230,19 @@ async function saveTripForm(tripId) {
 
   if (tripId) {
     tripData.id = tripId;
+    const existing = await EvolveDB.dbGet(EvolveDB.STORES.TRIPS, tripId);
+    tripData.uuid = existing && existing.uuid ? existing.uuid : EvolveDB.generateUUID();
     await EvolveDB.dbPut(EvolveDB.STORES.TRIPS, tripData);
     showToast('Sortie modifiée', 'success');
   } else {
+    tripData.uuid = EvolveDB.generateUUID();
     await EvolveDB.dbAdd(EvolveDB.STORES.TRIPS, tripData);
-    showToast('Sortie enregistrée', 'success');
+    showToast(rideInProgress ? 'Ride terminé et enregistré' : 'Sortie enregistrée', 'success');
+  }
+
+  if (rideInProgress) {
+    await Trips.clearRideInProgress();
+    if (window.refreshFabLabel) await window.refreshFabLabel();
   }
 
   closeModal();
@@ -174,6 +283,26 @@ Trips.renderDashboard = async function () {
   const trips = await EvolveDB.dbGetAll(EvolveDB.STORES.TRIPS);
   const wheels = await EvolveDB.dbGetAll(EvolveDB.STORES.WHEELS);
   const stats = Calc.computeStats(trips);
+
+  // Indicateur ride en cours, visible uniquement s'il y en a un
+  const rideInProgress = await Trips.getRideInProgress();
+  const ripBanner = document.getElementById('dash-ride-in-progress-banner');
+  if (rideInProgress) {
+    ripBanner.innerHTML = `
+      <div class="panel" style="border-color:var(--accent-amber);background:var(--accent-amber-dim)">
+        <div class="flex-row" style="justify-content:space-between">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--accent-amber)">Ride en cours</div>
+            <div style="font-size:12.5px;color:var(--text-secondary);margin-top:2px">Départ à ${Calc.formatDateTime(rideInProgress.startTimestamp)} · ${rideInProgress.batteryStart}%</div>
+          </div>
+          <button class="btn btn-primary btn-sm" id="dash-finish-ride-btn">Terminer</button>
+        </div>
+      </div>
+    `;
+    document.getElementById('dash-finish-ride-btn').onclick = () => Trips.openTripForm(null, { completingRideInProgress: true });
+  } else {
+    ripBanner.innerHTML = '';
+  }
 
   document.getElementById('dash-total-km').innerHTML = `${stats.totalKm}<span class="unit">km</span>`;
   document.getElementById('dash-total-trips').textContent = stats.totalTrips;

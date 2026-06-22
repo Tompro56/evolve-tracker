@@ -144,6 +144,7 @@ body {
   background: var(--bg-panel);
   border-top: 1px solid var(--border-subtle);
   display: flex;
+  align-items: center;
   padding-bottom: var(--safe-bottom);
 }
 
@@ -176,34 +177,91 @@ body {
   color: var(--accent-amber);
 }
 
-/* --- FAB (saisie rapide) --- */
-.fab {
-  position: fixed;
-  right: 18px;
-  bottom: calc(86px + var(--safe-bottom));
-  z-index: 55;
-  width: 56px;
-  height: 56px;
+/* --- Nav FAB central (surélevé) --- */
+.nav-fab-wrapper {
+  flex: 0 0 76px;
+  display: flex;
+  justify-content: center;
+  position: relative;
+}
+
+.nav-fab {
+  width: 54px;
+  height: 54px;
   border-radius: 50%;
   background: var(--accent-amber);
   color: #1a1304;
-  border: none;
+  border: 3px solid var(--bg-base);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 16px rgba(255, 157, 46, 0.35), 0 2px 6px rgba(0,0,0,0.4);
+  box-shadow: 0 3px 12px rgba(255, 157, 46, 0.4), 0 2px 6px rgba(0,0,0,0.4);
   cursor: pointer;
-  transition: transform 0.12s ease;
+  transition: transform 0.15s ease;
+  position: relative;
+  top: -16px;
 }
 
-.fab:active { transform: scale(0.93); }
+.nav-fab:active { transform: scale(0.93); }
+.nav-fab.menu-open { transform: rotate(45deg); }
 
-.fab svg {
-  width: 26px;
-  height: 26px;
+.nav-fab svg {
+  width: 24px;
+  height: 24px;
   stroke: #1a1304;
   stroke-width: 2.4;
 }
+
+.fab-menu {
+  position: absolute;
+  bottom: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.fab-menu.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.fab-menu-item {
+  white-space: nowrap;
+  background: var(--bg-panel-raised);
+  border: 1px solid var(--border-strong);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  font-weight: 500;
+  padding: 11px 18px;
+  border-radius: 24px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.45);
+}
+
+.fab-menu-item:active { filter: brightness(1.15); }
+
+.fab-menu-item.is-finish {
+  background: var(--accent-green-dim);
+  border-color: var(--accent-green);
+  color: var(--accent-green);
+}
+
+.fab-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 54;
+  display: none;
+}
+
+.fab-backdrop.active { display: block; }
+
+/* --- Utility --- */
 
 /* --- Cards / Panels --- */
 .panel {
@@ -892,6 +950,101 @@ body {
 
 .detail-row .detail-label { color: var(--text-secondary); }
 .detail-row .detail-value { color: var(--text-primary); font-weight: 500; font-family: var(--font-mono); }
+
+/* --- Update banner --- */
+.update-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 80;
+  background: var(--accent-amber-dim);
+  border-bottom: 1px solid var(--accent-amber);
+  color: var(--text-primary);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13.5px;
+  transform: translateY(-100%);
+  transition: transform 0.25s ease;
+}
+
+.update-banner.show {
+  transform: translateY(0);
+}
+
+.update-banner .btn {
+  flex-shrink: 0;
+  padding: 7px 14px;
+}
+
+/* --- Install banner --- */
+.install-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 79;
+  background: var(--bg-panel-raised);
+  border-bottom: 1px solid var(--border-strong);
+  color: var(--text-primary);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  transform: translateY(-100%);
+  transition: transform 0.25s ease;
+}
+
+.install-banner.show {
+  transform: translateY(0);
+}
+
+.install-banner span { flex: 1; line-height: 1.35; }
+
+/* --- Tab bar (Stats / Historique) --- */
+.tab-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tab-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 10px 4px 12px;
+  cursor: pointer;
+  position: relative;
+}
+
+.tab-btn.active {
+  color: var(--accent-amber);
+}
+
+.tab-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent-amber);
+}
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; animation: fadeIn 0.18s ease; }
 
 /* --- Utility --- */
 .text-center { text-align: center; }
