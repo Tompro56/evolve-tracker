@@ -1,7 +1,7 @@
 {
-  "name": "Evolve Tracker",
-  "short_name": "Evolve Tracker",
-  "description": "Suivi de batterie, kilométrage et entretien pour skateboard électrique",
+  "name": "Ride Tracker",
+  "short_name": "Ride Tracker",
+  "description": "Suivi de batterie, kilométrage et entretien pour engins de déplacement électriques",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

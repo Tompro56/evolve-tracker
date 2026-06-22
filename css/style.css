@@ -114,6 +114,38 @@ body {
   .app-header .brand .pulse-dot { animation: none; }
 }
 
+.device-switcher {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--bg-panel-raised);
+  border: 1px solid var(--border-strong);
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 6px 28px 6px 12px;
+  border-radius: 14px;
+  max-width: 38vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M6 9l6 6 6-6' stroke='%23a8b0ab' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 14px;
+}
+
+.device-switcher:focus {
+  outline: none;
+  border-color: var(--accent-amber);
+}
+
+.device-switcher option {
+  background: var(--bg-panel-raised);
+  color: var(--text-primary);
+}
+
 /* --- Main content --- */
 .view {
   flex: 1;
@@ -1069,6 +1101,31 @@ body {
 }
 
 .install-banner span { flex: 1; line-height: 1.35; }
+
+.export-reminder-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 78;
+  background: var(--bg-panel-raised);
+  border-bottom: 1px solid var(--accent-green);
+  color: var(--text-primary);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  transform: translateY(-100%);
+  transition: transform 0.25s ease;
+}
+
+.export-reminder-banner.show {
+  transform: translateY(0);
+}
+
+.export-reminder-banner span { flex: 1; line-height: 1.35; }
 
 /* --- Tab bar (Stats / Historique) --- */
 .tab-bar {

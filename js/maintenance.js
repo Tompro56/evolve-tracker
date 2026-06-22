@@ -1,5 +1,5 @@
 // ============================================================
-// EVOLVE TRACKER - Module Entretien / Interventions
+// RIDE TRACKER - Module Entretien / Interventions
 // ============================================================
 
 const Maintenance = {};
@@ -9,8 +9,9 @@ let currentMaintenanceSearch = '';
 
 // --- Formulaire nouvelle / édition intervention ---
 Maintenance.openInterventionForm = async function (interventionId = null) {
+  const deviceId = await Devices.getCurrentId();
   const interventionTypes = await EvolveDB.dbGetAll(EvolveDB.STORES.INTERVENTION_TYPES);
-  const parts = await EvolveDB.dbGetAll(EvolveDB.STORES.PARTS);
+  const parts = (await EvolveDB.dbGetAll(EvolveDB.STORES.PARTS)).filter(p => p.deviceId === deviceId);
   let intervention = null;
   if (interventionId) intervention = await EvolveDB.dbGet(EvolveDB.STORES.INTERVENTIONS, interventionId);
 
@@ -38,6 +39,11 @@ Maintenance.openInterventionForm = async function (interventionId = null) {
 
     <div class="form-group">
       <label class="form-label">Parties concernées</label>
+      ${parts.length === 0 ? `
+        <div class="empty-state" style="padding:14px;text-align:left">
+          <p style="margin:0">Aucune pièce configurée pour cet appareil. Ajoute-les dans Réglages &gt; Appareil pour pouvoir les associer ici (facultatif).</p>
+        </div>
+      ` : `
       <div class="checkbox-list" id="int-parts-list">
         ${parts.map(p => {
           const existing = selectedParts.find(sp => sp.partName === p.name);
@@ -59,6 +65,7 @@ Maintenance.openInterventionForm = async function (interventionId = null) {
         `;
         }).join('')}
       </div>
+      `}
     </div>
 
     <div class="form-group">
@@ -134,8 +141,9 @@ async function saveInterventionForm(interventionId) {
     return;
   }
 
+  const partsListExists = !!sheet.querySelector('#int-parts-list');
   const partCheckboxes = sheet.querySelectorAll('.part-checkbox:checked');
-  if (partCheckboxes.length === 0) {
+  if (partsListExists && partCheckboxes.length === 0) {
     showToast('Sélectionne au moins une partie concernée.', 'error');
     return;
   }
@@ -162,10 +170,12 @@ async function saveInterventionForm(interventionId) {
     data.id = interventionId;
     const existing = await EvolveDB.dbGet(EvolveDB.STORES.INTERVENTIONS, interventionId);
     data.uuid = existing && existing.uuid ? existing.uuid : EvolveDB.generateUUID();
+    data.deviceId = existing && existing.deviceId !== undefined ? existing.deviceId : await Devices.getCurrentId();
     await EvolveDB.dbPut(EvolveDB.STORES.INTERVENTIONS, data);
     showToast('Intervention modifiée', 'success');
   } else {
     data.uuid = EvolveDB.generateUUID();
+    data.deviceId = await Devices.getCurrentId();
     await EvolveDB.dbAdd(EvolveDB.STORES.INTERVENTIONS, data);
     showToast('Intervention enregistrée', 'success');
   }
@@ -221,7 +231,8 @@ function escapeHtml(str) {
 
 // --- Rendu liste interventions ---
 Maintenance.renderList = async function () {
-  const interventions = await EvolveDB.dbGetAll(EvolveDB.STORES.INTERVENTIONS);
+  const deviceId = await Devices.getCurrentId();
+  const interventions = (await EvolveDB.dbGetAll(EvolveDB.STORES.INTERVENTIONS)).filter(i => i.deviceId === deviceId);
 
   let result = Calc.searchInterventions(interventions, currentMaintenanceSearch);
   result = Calc.sortInterventions(result, currentMaintenanceSort.by, currentMaintenanceSort.order);
@@ -236,7 +247,7 @@ Maintenance.renderList = async function () {
   }
 
   listContainer.innerHTML = result.map(i => {
-    const badgeClass = i.interventionTypes.includes('Remplacement') ? 'badge-remplacement' : i.interventionTypes.includes('Révision Evolve') ? 'badge-revision' : 'badge-entretien';
+    const badgeClass = i.interventionTypes.includes('Remplacement') ? 'badge-remplacement' : i.interventionTypes.includes('Révision constructeur') ? 'badge-revision' : 'badge-entretien';
     const partsNames = i.parts.map(p => p.partName).join(', ');
     return `
       <div class="item-card" data-intervention-id="${i.id}">

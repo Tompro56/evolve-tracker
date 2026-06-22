@@ -1,9 +1,9 @@
 // ============================================================
-// EVOLVE TRACKER - Module Base de données (IndexedDB)
+// RIDE TRACKER - Module Base de données (IndexedDB)
 // ============================================================
 
-const DB_NAME = 'EvolveTrackerDB';
-const DB_VERSION = 3; // v2 : champ uuid. v3 : store ride en cours (RIDE_IN_PROGRESS)
+const DB_NAME = 'EvolveTrackerDB'; // Nom technique conservé pour ne pas casser la migration des installations existantes
+const DB_VERSION = 4; // v2 : uuid. v3 : ride en cours. v4 : multi-appareil (store DEVICES + deviceId sur trips/interventions/wheels/parts)
 
 const STORES = {
   TRIPS: 'trips',
@@ -13,7 +13,8 @@ const STORES = {
   RIDE_TYPES: 'rideTypes',
   INTERVENTION_TYPES: 'interventionTypes',
   SETTINGS: 'settings',
-  RIDE_IN_PROGRESS: 'rideInProgress'
+  RIDE_IN_PROGRESS: 'rideInProgress',
+  DEVICES: 'devices'
 };
 
 let dbInstance = null;
@@ -26,6 +27,8 @@ function openDB() {
 
     request.onupgradeneeded = (event) => {
       const db = event.target.result;
+      const tx = event.target.transaction;
+      const oldVersion = event.oldVersion;
 
       // Trajets
       if (!db.objectStoreNames.contains(STORES.TRIPS)) {
@@ -33,19 +36,19 @@ function openDB() {
         tripsStore.createIndex('timestamp', 'timestamp', { unique: false });
         tripsStore.createIndex('rideType', 'rideType', { unique: false });
         tripsStore.createIndex('uuid', 'uuid', { unique: true });
-      } else if (event.oldVersion < 2) {
-        const tripsStore = event.target.transaction.objectStore(STORES.TRIPS);
+      } else if (oldVersion < 2) {
+        const tripsStore = tx.objectStore(STORES.TRIPS);
         if (!tripsStore.indexNames.contains('uuid')) {
           tripsStore.createIndex('uuid', 'uuid', { unique: true });
         }
       }
 
-      // Roues (CRUD)
+      // Roues (CRUD, propre à chaque appareil depuis v4)
       if (!db.objectStoreNames.contains(STORES.WHEELS)) {
         db.createObjectStore(STORES.WHEELS, { keyPath: 'id', autoIncrement: true });
       }
 
-      // Parties du skate
+      // Pièces (CRUD, propre à chaque appareil depuis v4)
       if (!db.objectStoreNames.contains(STORES.PARTS)) {
         db.createObjectStore(STORES.PARTS, { keyPath: 'id', autoIncrement: true });
       }
@@ -55,37 +58,108 @@ function openDB() {
         const interventionsStore = db.createObjectStore(STORES.INTERVENTIONS, { keyPath: 'id', autoIncrement: true });
         interventionsStore.createIndex('timestamp', 'timestamp', { unique: false });
         interventionsStore.createIndex('uuid', 'uuid', { unique: true });
-      } else if (event.oldVersion < 2) {
-        const interventionsStore = event.target.transaction.objectStore(STORES.INTERVENTIONS);
+      } else if (oldVersion < 2) {
+        const interventionsStore = tx.objectStore(STORES.INTERVENTIONS);
         if (!interventionsStore.indexNames.contains('uuid')) {
           interventionsStore.createIndex('uuid', 'uuid', { unique: true });
         }
       }
 
-      // Types de ride (paramétrable)
+      // Types de ride (paramétrable, global, partagé entre tous les appareils)
       if (!db.objectStoreNames.contains(STORES.RIDE_TYPES)) {
         db.createObjectStore(STORES.RIDE_TYPES, { keyPath: 'id', autoIncrement: true });
       }
 
-      // Types d'intervention (paramétrable)
+      // Types d'intervention (paramétrable, global, partagé entre tous les appareils)
       if (!db.objectStoreNames.contains(STORES.INTERVENTION_TYPES)) {
         db.createObjectStore(STORES.INTERVENTION_TYPES, { keyPath: 'id', autoIncrement: true });
       }
 
-      // Paramètres généraux (clé/valeur)
+      // Paramètres généraux (clé/valeur) : utilisateur (global) + currentDeviceId
       if (!db.objectStoreNames.contains(STORES.SETTINGS)) {
         db.createObjectStore(STORES.SETTINGS, { keyPath: 'key' });
       }
 
-      // Ride en cours (un seul à la fois, clé fixe)
+      // Ride en cours : une entrée possible par appareil (clé = deviceId depuis v4, 'current' avant)
       if (!db.objectStoreNames.contains(STORES.RIDE_IN_PROGRESS)) {
         db.createObjectStore(STORES.RIDE_IN_PROGRESS, { keyPath: 'key' });
+      }
+
+      // Appareils (v4)
+      if (!db.objectStoreNames.contains(STORES.DEVICES)) {
+        const devicesStore = db.createObjectStore(STORES.DEVICES, { keyPath: 'id', autoIncrement: true });
+        devicesStore.createIndex('uuid', 'uuid', { unique: true });
+      }
+
+      // --- Migration v4 : multi-appareil ---
+      // Ne s'applique qu'aux installations existantes (oldVersion > 0). Une install neuve (oldVersion === 0)
+      // part sans appareil ; initDefaultData() lui en créera un générique vide au premier lancement.
+      if (oldVersion > 0 && oldVersion < 4) {
+        const devicesStore = tx.objectStore(STORES.DEVICES);
+        const defaultDevice = {
+          uuid: generateUUID(),
+          name: 'Evolve Bamboo GTR',
+          brand: 'Evolve',
+          model: 'Bamboo GTR',
+          acquisitionYear: null,
+          initialKm: 0,
+          createdAt: new Date().toISOString()
+        };
+        const addReq = devicesStore.add(defaultDevice);
+
+        addReq.onsuccess = () => {
+          const defaultDeviceId = addReq.result;
+
+          // Rattache tout l'historique existant (trips, interventions, wheels, parts) à l'appareil par défaut
+          [STORES.TRIPS, STORES.INTERVENTIONS, STORES.WHEELS, STORES.PARTS].forEach((storeName) => {
+            const store = tx.objectStore(storeName);
+            const cursorReq = store.openCursor();
+            cursorReq.onsuccess = (e) => {
+              const cursor = e.target.result;
+              if (cursor) {
+                const record = cursor.value;
+                if (record.deviceId === undefined) {
+                  record.deviceId = defaultDeviceId;
+                  cursor.update(record);
+                }
+                cursor.continue();
+              }
+            };
+          });
+
+          // Ride en cours éventuel : migre la clé fixe 'current' vers deviceId
+          const ripStore = tx.objectStore(STORES.RIDE_IN_PROGRESS);
+          const ripReq = ripStore.get('current');
+          ripReq.onsuccess = () => {
+            const rip = ripReq.result;
+            if (rip) {
+              ripStore.delete('current');
+              rip.key = defaultDeviceId;
+              rip.deviceId = defaultDeviceId;
+              ripStore.put(rip);
+            }
+          };
+
+          // Appareil actif par défaut
+          const settingsStore = tx.objectStore(STORES.SETTINGS);
+          settingsStore.put({ key: 'currentDeviceId', value: defaultDeviceId });
+        };
       }
     };
 
     request.onsuccess = (event) => {
       dbInstance = event.target.result;
+      // Si une autre page/onglet (ou un reload post-mise à jour) demande une version supérieure,
+      // cette connexion se ferme proactivement plutôt que de bloquer indéfiniment l'upgrade.
+      dbInstance.onversionchange = () => {
+        dbInstance.close();
+        dbInstance = null;
+      };
       resolve(dbInstance);
+    };
+
+    request.onblocked = () => {
+      console.warn("IndexedDB upgrade bloque : une connexion existante ne s'est pas fermee a temps.");
     };
 
     request.onerror = (event) => {
@@ -176,7 +250,6 @@ function generateUUID() {
 }
 
 // --- Migration : attribue un UUID à toute donnée existante qui n'en a pas ---
-// S'exécute une fois après l'ouverture de la base, ne touche pas aux données déjà migrées.
 async function migrateUUIDs() {
   for (const storeName of [STORES.TRIPS, STORES.INTERVENTIONS]) {
     const items = await dbGetAll(storeName);
@@ -190,22 +263,25 @@ async function migrateUUIDs() {
 }
 
 // --- Initialisation des données par défaut ---
-
+// Roues et pièces ne sont plus seedées ici : elles sont propres à chaque appareil et l'utilisateur
+// les construit lui-même (un skate n'a pas les mêmes pièces qu'une trottinette ou un gyroroue).
+// Seul un appareil générique vide est créé si aucun n'existe encore (premier lancement, install neuve).
 async function initDefaultData() {
-  // Roues par défaut
-  const existingWheels = await dbGetAll(STORES.WHEELS);
-  if (existingWheels.length === 0) {
-    const defaultWheels = [
-      { offroad: false, diameter: 175, characteristic: 'Route standard', isDefault: true },
-      { offroad: true, diameter: 175, characteristic: 'Crampon tout terrain', isDefault: false },
-      { offroad: false, diameter: 150, characteristic: 'Route', isDefault: false }
-    ];
-    for (const w of defaultWheels) {
-      await dbAdd(STORES.WHEELS, w);
-    }
+  const existingDevices = await dbGetAll(STORES.DEVICES);
+  if (existingDevices.length === 0) {
+    const newDeviceId = await dbAdd(STORES.DEVICES, {
+      uuid: generateUUID(),
+      name: 'Mon appareil',
+      brand: '',
+      model: '',
+      acquisitionYear: null,
+      initialKm: 0,
+      createdAt: new Date().toISOString()
+    });
+    await dbPut(STORES.SETTINGS, { key: 'currentDeviceId', value: newDeviceId });
   }
 
-  // Types de ride par défaut
+  // Types de ride par défaut (global)
   const existingRideTypes = await dbGetAll(STORES.RIDE_TYPES);
   if (existingRideTypes.length === 0) {
     const defaultRideTypes = ['Cruise', 'Vitesse'];
@@ -214,25 +290,12 @@ async function initDefaultData() {
     }
   }
 
-  // Types d'intervention par défaut
+  // Types d'intervention par défaut (global)
   const existingInterventionTypes = await dbGetAll(STORES.INTERVENTION_TYPES);
   if (existingInterventionTypes.length === 0) {
-    const defaultTypes = ['Entretien', 'Remplacement', 'Révision Evolve'];
+    const defaultTypes = ['Entretien', 'Remplacement', 'Révision constructeur'];
     for (const it of defaultTypes) {
       await dbAdd(STORES.INTERVENTION_TYPES, { name: it });
-    }
-  }
-
-  // Parties du skate par défaut
-  const existingParts = await dbGetAll(STORES.PARTS);
-  if (existingParts.length === 0) {
-    const defaultParts = [
-      'Truck', 'Bushings', 'Roues', 'Courroie', 'Pignon moteur', 'Poulie roue',
-      'Roulements', 'Chambre à air', 'Vis / écrous', 'Télécommande',
-      'Batterie', 'ESC', 'Câblage', 'Coque / deck', 'Grip tape', 'Protections (pads)'
-    ];
-    for (const p of defaultParts) {
-      await dbAdd(STORES.PARTS, { name: p });
     }
   }
 }

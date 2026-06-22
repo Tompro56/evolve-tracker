@@ -1,5 +1,5 @@
 // ============================================================
-// EVOLVE TRACKER - Module i18n (FR/EN)
+// RIDE TRACKER - Module i18n (FR/EN)
 // ============================================================
 
 const I18n = {};
@@ -66,8 +66,8 @@ const DICT = {
     add_ride_type: '+ Ajouter un type de ride',
     intervention_types: "Types d'intervention",
     add_intervention_type: "+ Ajouter un type d'intervention",
-    skate_parts: 'Parties du skate',
-    add_part: '+ Ajouter une partie',
+    parts: 'Pièces',
+    add_part: '+ Ajouter une pièce',
     data: 'Données',
     export_hint: 'Export régulier recommandé : seule vraie sauvegarde en cas de désinstallation.',
     export_trips: 'Exporter trajets en CSV',
@@ -81,7 +81,20 @@ const DICT = {
     start_ride: 'Démarrer un ride',
     log_full_ride: 'Enregistrer un ride complet',
     finish_ride: 'Terminer le ride en cours',
-    cancel_ride_in_progress: 'Annuler le ride en cours'
+    cancel_ride_in_progress: 'Annuler le ride en cours',
+    tab_device: 'Appareil',
+    tab_user: 'Utilisateur',
+    rider_profile: 'Profil',
+    rider_name: 'Nom du rider',
+    rider_email: 'Email',
+    export_reminder_days: "Rappel d'export (jours, 0 = désactivé)",
+    save: 'Enregistrer',
+    devices: 'Appareils',
+    add_device: '+ Ajouter un appareil',
+    export_reminder_text: 'Pense à exporter tes données en sauvegarde.',
+    export_choose_devices: 'Choisir les appareils à exporter',
+    export_all_devices: 'Tous les appareils',
+    export_confirm: 'Exporter'
   },
   en: {
     update_available: 'A new version is ready.',
@@ -144,7 +157,7 @@ const DICT = {
     add_ride_type: '+ Add a ride type',
     intervention_types: 'Intervention types',
     add_intervention_type: '+ Add an intervention type',
-    skate_parts: 'Skate parts',
+    parts: 'Parts',
     add_part: '+ Add a part',
     data: 'Data',
     export_hint: 'Regular export recommended: only real backup in case of uninstall.',
@@ -159,7 +172,20 @@ const DICT = {
     start_ride: 'Start a ride',
     log_full_ride: 'Log a full ride',
     finish_ride: 'Finish current ride',
-    cancel_ride_in_progress: 'Cancel ride in progress'
+    cancel_ride_in_progress: 'Cancel ride in progress',
+    tab_device: 'Device',
+    tab_user: 'User',
+    rider_profile: 'Profile',
+    rider_name: 'Rider name',
+    rider_email: 'Email',
+    export_reminder_days: 'Export reminder (days, 0 = disabled)',
+    save: 'Save',
+    devices: 'Devices',
+    add_device: '+ Add a device',
+    export_reminder_text: 'Time to export your data as a backup.',
+    export_choose_devices: 'Choose devices to export',
+    export_all_devices: 'All devices',
+    export_confirm: 'Export'
   }
 };
 

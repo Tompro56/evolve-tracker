@@ -1,11 +1,11 @@
 // ============================================================
-// EVOLVE TRACKER - App principale (navigation, init, helpers UI)
+// RIDE TRACKER - App principale (navigation, init, helpers UI)
 // ============================================================
 
 const App = {};
 
 let currentView = 'dashboard';
-let currentTabGroup = { stats: 'ride', history: 'ride' };
+let currentTabGroup = { stats: 'ride', history: 'ride', settings: 'device' };
 
 App.init = async function () {
   await EvolveDB.initDefaultData();
@@ -21,8 +21,12 @@ App.init = async function () {
   setupCsvImportExport();
   setupLanguageSelector();
   setupInstallPrompt();
+  setupDeviceSwitcher();
+  await refreshDeviceSwitcher();
+  setupExportReminderBanner();
   await App.refreshCurrentView();
   await refreshFabLabel();
+  await refreshExportReminder();
   registerServiceWorker();
 };
 
@@ -30,6 +34,78 @@ function setupNavigation() {
   document.querySelectorAll('.nav-item').forEach(item => {
     item.onclick = () => switchView(item.dataset.view);
   });
+}
+
+// ============================================================
+// SÉLECTEUR D'APPAREIL DANS LE HEADER (multi-appareil)
+// ============================================================
+function setupDeviceSwitcher() {
+  const select = document.getElementById('device-switcher');
+  if (!select) return;
+  select.onchange = async () => {
+    await Devices.setCurrentId(parseInt(select.value));
+    await refreshFabLabel();
+    await App.refreshCurrentView();
+  };
+}
+
+async function refreshDeviceSwitcher() {
+  const select = document.getElementById('device-switcher');
+  if (!select) return;
+  const devices = await Devices.getAll();
+  const currentId = await Devices.getCurrentId();
+  select.innerHTML = devices.map(d => `<option value="${d.id}" ${d.id === currentId ? 'selected' : ''}>${d.name}</option>`).join('');
+}
+window.refreshDeviceSwitcher = refreshDeviceSwitcher;
+
+// ============================================================
+// RAPPEL D'EXPORT PÉRIODIQUE (configurable, jamais automatique : pas de backend)
+// ============================================================
+async function refreshExportReminder() {
+  const banner = document.getElementById('export-reminder-banner');
+  if (!banner) return;
+
+  // Évite le chevauchement visuel avec les bandeaux update/install (tous en position fixed top:0).
+  // Pas de système d'empilement dynamique : on reporte simplement le rappel au prochain contrôle.
+  const updateBanner = document.getElementById('update-banner');
+  const installBanner = document.getElementById('install-banner');
+  if ((updateBanner && updateBanner.classList.contains('show')) || (installBanner && installBanner.classList.contains('show'))) {
+    return;
+  }
+
+  const reminderSetting = await EvolveDB.dbGet(EvolveDB.STORES.SETTINGS, 'exportReminderDays');
+  const reminderDays = reminderSetting ? reminderSetting.value : 0;
+
+  if (!reminderDays || reminderDays <= 0) {
+    banner.classList.remove('show');
+    return;
+  }
+
+  const lastExportSetting = await EvolveDB.dbGet(EvolveDB.STORES.SETTINGS, 'lastExportAt');
+  const lastExportAt = lastExportSetting ? new Date(lastExportSetting.value) : null;
+  const daysSince = lastExportAt ? (Date.now() - lastExportAt.getTime()) / 86400000 : Infinity;
+
+  if (daysSince >= reminderDays) {
+    banner.classList.add('show');
+  } else {
+    banner.classList.remove('show');
+  }
+}
+window.refreshExportReminder = refreshExportReminder;
+
+function setupExportReminderBanner() {
+  const dismissBtn = document.getElementById('export-reminder-dismiss-btn');
+  const exportBtn = document.getElementById('export-reminder-export-btn');
+  const banner = document.getElementById('export-reminder-banner');
+  if (dismissBtn) {
+    dismissBtn.onclick = () => banner.classList.remove('show');
+  }
+  if (exportBtn) {
+    exportBtn.onclick = () => {
+      banner.classList.remove('show');
+      CsvIO.openExportDeviceSelector('trips');
+    };
+  }
 }
 
 async function switchView(viewName) {
@@ -56,31 +132,35 @@ App.refreshCurrentView = async function () {
 
 async function renderAllSettings() {
   await Settings.renderWheels();
+  await Settings.renderParts();
   await Settings.renderRideTypes();
   await Settings.renderInterventionTypes();
-  await Settings.renderParts();
+  await Settings.renderDevices();
+  await Settings.renderUserProfile();
   const footer = document.getElementById('app-version-footer');
   if (footer && window.APP_VERSION) {
-    footer.textContent = `Evolve Tracker v${window.APP_VERSION}`;
+    footer.textContent = `Ride Tracker v${window.APP_VERSION}`;
   }
 }
 
-// --- Onglets (Stats : Ride/Charge, Historique : Ride/Entretien) ---
+// --- Onglets génériques (Stats : Ride/Charge, Historique : Ride/Entretien, Réglages : Appareil/Utilisateur) ---
 function setupTabs() {
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.onclick = async () => {
       const group = btn.dataset.tabgroup;
       const tab = btn.dataset.tab;
+      const panelId = btn.dataset.panel;
       currentTabGroup[group] = tab;
 
       document.querySelectorAll(`.tab-btn[data-tabgroup="${group}"]`).forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
 
-      document.querySelectorAll(`#${group === 'stats' ? 'view-stats' : 'view-history'} .tab-panel`).forEach(p => p.classList.remove('active'));
-      const panelId = group === 'stats'
-        ? (tab === 'ride' ? 'stats-tab-ride' : 'stats-tab-charge')
-        : (tab === 'ride' ? 'history-tab-ride' : 'history-tab-maintenance');
-      document.getElementById(panelId).classList.add('active');
+      const panel = document.getElementById(panelId);
+      const panelGroup = panel ? panel.closest('.view') : null;
+      if (panelGroup) {
+        panelGroup.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      }
+      if (panel) panel.classList.add('active');
 
       await App.refreshCurrentView();
     };
@@ -302,8 +382,10 @@ function setupSettingsControls() {
   document.getElementById('settings-add-ridetype').onclick = () => Settings.openSimpleItemFormNew(EvolveDB.STORES.RIDE_TYPES, Settings.renderRideTypes);
   document.getElementById('settings-add-interventiontype').onclick = () => Settings.openSimpleItemFormNew(EvolveDB.STORES.INTERVENTION_TYPES, Settings.renderInterventionTypes);
   document.getElementById('settings-add-part').onclick = () => Settings.openSimpleItemFormNew(EvolveDB.STORES.PARTS, Settings.renderParts);
-  document.getElementById('settings-export-csv').onclick = () => CsvIO.exportTrips();
-  document.getElementById('settings-export-csv-maintenance').onclick = () => CsvIO.exportMaintenance();
+  document.getElementById('settings-export-csv').onclick = () => CsvIO.openExportDeviceSelector('trips');
+  document.getElementById('settings-export-csv-maintenance').onclick = () => CsvIO.openExportDeviceSelector('maintenance');
+  document.getElementById('settings-add-device').onclick = () => Settings.openDeviceForm();
+  document.getElementById('profile-save-btn').onclick = () => Settings.saveUserProfile();
 }
 
 // --- Import CSV (déclenchement des inputs file cachés) ---

@@ -1,5 +1,5 @@
 // ============================================================
-// EVOLVE TRACKER - Version de l'application
+// RIDE TRACKER - Version de l'application
 // ============================================================
 // À incrémenter manuellement à chaque livraison.
 // Convention : MAJEUR.MINEUR.CORRECTIF
@@ -7,6 +7,6 @@
 // - MINEUR : nouvelle fonctionnalité ou amélioration notable
 // - CORRECTIF : correction de bug, ajustement visuel, retouche mineure
 
-const APP_VERSION = '2.3.0';
+const APP_VERSION = '3.0.0';
 
 window.APP_VERSION = APP_VERSION;

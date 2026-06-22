@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
-<title>Evolve Tracker</title>
+<title>Ride Tracker</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0d0f0e">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Evolve Tracker">
+<meta name="apple-mobile-web-app-title" content="Ride Tracker">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" href="icons/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
@@ -17,7 +17,8 @@
 <body>
 
 <header class="app-header">
-  <div class="brand"><span class="pulse-dot"></span>EVOLVE TRACKER</div>
+  <div class="brand"><span class="pulse-dot"></span>RIDE TRACKER</div>
+  <select class="device-switcher" id="device-switcher"></select>
 </header>
 
 <div class="update-banner" id="update-banner">
@@ -31,6 +32,15 @@
   <div class="flex-row" style="gap:8px">
     <button class="btn btn-primary btn-sm" id="install-confirm-btn" data-i18n="install">Installer</button>
     <button class="modal-close" id="install-dismiss-btn"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+  </div>
+</div>
+
+<!-- Rappel d'export périodique (configurable dans Réglages > Utilisateur, jamais automatique) -->
+<div class="export-reminder-banner" id="export-reminder-banner">
+  <span data-i18n="export_reminder_text">Pense à exporter tes données en sauvegarde.</span>
+  <div class="flex-row" style="gap:8px">
+    <button class="btn btn-primary btn-sm" id="export-reminder-export-btn" data-i18n="export_trips">Exporter trajets en CSV</button>
+    <button class="modal-close" id="export-reminder-dismiss-btn"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
   </div>
 </div>
 
@@ -84,8 +94,8 @@
     <div class="page-header"><h1 data-i18n="stats_charts">Stats & graphiques</h1></div>
 
     <div class="tab-bar">
-      <button class="tab-btn active" data-tab="ride" data-tabgroup="stats" data-i18n="tab_ride">Ride</button>
-      <button class="tab-btn" data-tab="charge" data-tabgroup="stats" data-i18n="tab_charge">Charge</button>
+      <button class="tab-btn active" data-tab="ride" data-tabgroup="stats" data-panel="stats-tab-ride" data-i18n="tab_ride">Ride</button>
+      <button class="tab-btn" data-tab="charge" data-tabgroup="stats" data-panel="stats-tab-charge" data-i18n="tab_charge">Charge</button>
     </div>
 
     <!-- Onglet Ride -->
@@ -182,8 +192,8 @@
     <div class="page-header"><h1 data-i18n="history">Historique</h1></div>
 
     <div class="tab-bar">
-      <button class="tab-btn active" data-tab="ride" data-tabgroup="history" data-i18n="tab_ride">Ride</button>
-      <button class="tab-btn" data-tab="maintenance" data-tabgroup="history" data-i18n="tab_maintenance">Entretien</button>
+      <button class="tab-btn active" data-tab="ride" data-tabgroup="history" data-panel="history-tab-ride" data-i18n="tab_ride">Ride</button>
+      <button class="tab-btn" data-tab="maintenance" data-tabgroup="history" data-panel="history-tab-maintenance" data-i18n="tab_maintenance">Entretien</button>
     </div>
 
     <!-- Onglet Ride -->
@@ -295,51 +305,88 @@
   <section class="view" id="view-settings">
     <div class="page-header"><h1 data-i18n="settings">Paramètres</h1></div>
 
-    <div class="settings-section">
-      <div class="panel-title" data-i18n="language">Langue</div>
-      <div class="panel">
-        <div class="segmented-control" id="settings-language-selector">
-          <button data-lang="fr" data-i18n="french">Français</button>
-          <button data-lang="en" data-i18n="english">English</button>
-        </div>
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="device" data-tabgroup="settings" data-panel="settings-tab-device" data-i18n="tab_device">Appareil</button>
+      <button class="tab-btn" data-tab="user" data-tabgroup="settings" data-panel="settings-tab-user" data-i18n="tab_user">Utilisateur</button>
+    </div>
+
+    <!-- Onglet Appareil : config technique propre à l'appareil actif (sélectionné dans le header) -->
+    <div class="tab-panel active" id="settings-tab-device">
+      <div class="settings-section">
+        <div class="panel-title" data-i18n="wheels">Roues</div>
+        <div class="panel" id="settings-wheels-list"></div>
+        <button class="btn btn-secondary btn-block" id="settings-add-wheel" data-i18n="add_wheel">+ Ajouter une roue</button>
+      </div>
+
+      <div class="settings-section">
+        <div class="panel-title" data-i18n="parts">Pièces</div>
+        <div class="panel" id="settings-parts-list"></div>
+        <button class="btn btn-secondary btn-block" id="settings-add-part" data-i18n="add_part">+ Ajouter une pièce</button>
       </div>
     </div>
 
-    <div class="settings-section">
-      <div class="panel-title" data-i18n="wheels">Roues</div>
-      <div class="panel" id="settings-wheels-list"></div>
-      <button class="btn btn-secondary btn-block" id="settings-add-wheel" data-i18n="add_wheel">+ Ajouter une roue</button>
-    </div>
+    <!-- Onglet Utilisateur : tout ce qui est global (profil, appareils, types, langue, données) -->
+    <div class="tab-panel" id="settings-tab-user">
+      <div class="settings-section">
+        <div class="panel-title" data-i18n="rider_profile">Profil</div>
+        <div class="panel">
+          <div class="form-group">
+            <label class="form-label" data-i18n="rider_name">Nom du rider</label>
+            <input type="text" class="form-input" id="profile-rider-name" placeholder="ex: Thomas">
+          </div>
+          <div class="form-group">
+            <label class="form-label" data-i18n="rider_email">Email</label>
+            <input type="email" class="form-input" id="profile-rider-email" placeholder="ex: toi@exemple.com">
+          </div>
+          <div class="form-group">
+            <label class="form-label" data-i18n="export_reminder_days">Rappel d'export (jours, 0 = désactivé)</label>
+            <input type="number" class="form-input mono" id="profile-export-reminder-days" min="0" step="1" value="0">
+          </div>
+          <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:14px" id="profile-last-export">Dernier export : jamais</div>
+          <button class="btn btn-primary btn-block" id="profile-save-btn" data-i18n="save">Enregistrer</button>
+        </div>
+      </div>
 
-    <div class="settings-section">
-      <div class="panel-title" data-i18n="ride_types">Types de ride</div>
-      <div class="panel" id="settings-ridetypes-list"></div>
-      <button class="btn btn-secondary btn-block" id="settings-add-ridetype" data-i18n="add_ride_type">+ Ajouter un type de ride</button>
-    </div>
+      <div class="settings-section">
+        <div class="panel-title" data-i18n="devices">Appareils</div>
+        <div class="panel" id="settings-devices-list"></div>
+        <button class="btn btn-secondary btn-block" id="settings-add-device" data-i18n="add_device">+ Ajouter un appareil</button>
+      </div>
 
-    <div class="settings-section">
-      <div class="panel-title" data-i18n="intervention_types">Types d'intervention</div>
-      <div class="panel" id="settings-interventiontypes-list"></div>
-      <button class="btn btn-secondary btn-block" id="settings-add-interventiontype" data-i18n="add_intervention_type">+ Ajouter un type d'intervention</button>
-    </div>
+      <div class="settings-section">
+        <div class="panel-title" data-i18n="language">Langue</div>
+        <div class="panel">
+          <div class="segmented-control" id="settings-language-selector">
+            <button data-lang="fr" data-i18n="french">Français</button>
+            <button data-lang="en" data-i18n="english">English</button>
+          </div>
+        </div>
+      </div>
 
-    <div class="settings-section">
-      <div class="panel-title" data-i18n="skate_parts">Parties du skate</div>
-      <div class="panel" id="settings-parts-list"></div>
-      <button class="btn btn-secondary btn-block" id="settings-add-part" data-i18n="add_part">+ Ajouter une partie</button>
-    </div>
+      <div class="settings-section">
+        <div class="panel-title" data-i18n="ride_types">Types de ride</div>
+        <div class="panel" id="settings-ridetypes-list"></div>
+        <button class="btn btn-secondary btn-block" id="settings-add-ridetype" data-i18n="add_ride_type">+ Ajouter un type de ride</button>
+      </div>
 
-    <div class="settings-section">
-      <div class="panel-title" data-i18n="data">Données</div>
-      <div class="panel">
-        <div style="font-size:12.5px;color:var(--text-tertiary);margin-bottom:10px" data-i18n="export_hint">Export régulier recommandé : seule vraie sauvegarde en cas de désinstallation.</div>
-        <button class="btn btn-secondary btn-block mt-8" id="settings-export-csv" data-i18n="export_trips">Exporter trajets en CSV</button>
-        <button class="btn btn-secondary btn-block mt-8" id="settings-export-csv-maintenance" data-i18n="export_maintenance">Exporter interventions en CSV</button>
-        <div style="height:1px;background:var(--border-subtle);margin:14px 0"></div>
-        <button class="btn btn-secondary btn-block" id="settings-import-csv" data-i18n="import_trips">Importer trajets depuis CSV</button>
-        <input type="file" id="settings-import-csv-input" accept=".csv" class="hidden">
-        <button class="btn btn-secondary btn-block mt-8" id="settings-import-csv-maintenance" data-i18n="import_maintenance">Importer interventions depuis CSV</button>
-        <input type="file" id="settings-import-csv-maintenance-input" accept=".csv" class="hidden">
+      <div class="settings-section">
+        <div class="panel-title" data-i18n="intervention_types">Types d'intervention</div>
+        <div class="panel" id="settings-interventiontypes-list"></div>
+        <button class="btn btn-secondary btn-block" id="settings-add-interventiontype" data-i18n="add_intervention_type">+ Ajouter un type d'intervention</button>
+      </div>
+
+      <div class="settings-section">
+        <div class="panel-title" data-i18n="data">Données</div>
+        <div class="panel">
+          <div style="font-size:12.5px;color:var(--text-tertiary);margin-bottom:10px" data-i18n="export_hint">Export régulier recommandé : seule vraie sauvegarde en cas de désinstallation.</div>
+          <button class="btn btn-secondary btn-block mt-8" id="settings-export-csv" data-i18n="export_trips">Exporter trajets en CSV</button>
+          <button class="btn btn-secondary btn-block mt-8" id="settings-export-csv-maintenance" data-i18n="export_maintenance">Exporter interventions en CSV</button>
+          <div style="height:1px;background:var(--border-subtle);margin:14px 0"></div>
+          <button class="btn btn-secondary btn-block" id="settings-import-csv" data-i18n="import_trips">Importer trajets depuis CSV</button>
+          <input type="file" id="settings-import-csv-input" accept=".csv" class="hidden">
+          <button class="btn btn-secondary btn-block mt-8" id="settings-import-csv-maintenance" data-i18n="import_maintenance">Importer interventions depuis CSV</button>
+          <input type="file" id="settings-import-csv-maintenance-input" accept=".csv" class="hidden">
+        </div>
       </div>
     </div>
 
@@ -393,6 +440,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="js/db.js"></script>
+<script src="js/devices.js"></script>
 <script src="js/calc.js"></script>
 <script src="js/charts.js"></script>
 <script src="js/i18n.js"></script>

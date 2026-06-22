@@ -1,8 +1,8 @@
 // ============================================================
-// EVOLVE TRACKER - Module CSV Import/Export (avec UUID)
+// RIDE TRACKER - Module CSV Import/Export (multi-appareil, avec UUID)
 // ============================================================
-// Format trajets : uuid;timestamp(ISO);batteryStart;batteryEnd;distanceKm;rideType;wheelDiameter;wheelCharacteristic;wheelOffroad
-// Format interventions : uuid;timestamp(ISO);interventionTypes(|-separes);parts(JSON);totalBudget;generalComment
+// Format trajets : uuid;deviceUuid;timestamp(ISO);batteryStart;batteryEnd;distanceKm;rideType;wheelDiameter;wheelCharacteristic;wheelOffroad
+// Format interventions : uuid;deviceUuid;timestamp(ISO);interventionTypes(|-separes);parts(JSON);totalBudget;generalComment
 
 const CsvIO = {};
 
@@ -58,12 +58,83 @@ function dateStamp() {
   return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
 }
 
+async function markExported() {
+  await EvolveDB.dbPut(EvolveDB.STORES.SETTINGS, { key: 'lastExportAt', value: new Date().toISOString() });
+  if (window.refreshExportReminder) await window.refreshExportReminder();
+}
+
+// ============================================================
+// SÉLECTEUR D'APPAREILS POUR L'EXPORT (cases à cocher, tout sélectionné par défaut)
+// ============================================================
+// kind : 'trips' | 'maintenance'
+CsvIO.openExportDeviceSelector = async function (kind) {
+  const devices = await Devices.getAll();
+  const sheet = document.getElementById('modal-sheet');
+
+  sheet.innerHTML = `
+    <div class="modal-header">
+      <h2 data-i18n="export_choose_devices">Choisir les appareils à exporter</h2>
+      <button class="modal-close" id="export-select-close"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="checkbox-row" style="margin-bottom:14px;border-bottom:1px solid var(--border-subtle);padding-bottom:14px">
+      <input type="checkbox" id="export-select-all" checked>
+      <label for="export-select-all"><strong data-i18n="export_all_devices">Tous les appareils</strong></label>
+    </div>
+    <div id="export-device-checkboxes">
+      ${devices.map(d => `
+        <div class="checkbox-row" style="margin-bottom:10px">
+          <input type="checkbox" class="export-device-checkbox" data-id="${d.id}" checked>
+          <label data-id-label="${d.id}">${d.name}</label>
+        </div>
+      `).join('')}
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary flex-1" id="export-confirm-btn" data-i18n="export_confirm">Exporter</button>
+    </div>
+  `;
+
+  document.getElementById('export-select-close').onclick = closeModal;
+
+  const allCheckbox = document.getElementById('export-select-all');
+  const deviceCheckboxes = () => Array.from(sheet.querySelectorAll('.export-device-checkbox'));
+
+  allCheckbox.onchange = () => {
+    deviceCheckboxes().forEach(cb => { cb.checked = allCheckbox.checked; });
+  };
+  deviceCheckboxes().forEach(cb => {
+    cb.onchange = () => {
+      allCheckbox.checked = deviceCheckboxes().every(c => c.checked);
+    };
+  });
+
+  document.getElementById('export-confirm-btn').onclick = async () => {
+    const selectedIds = deviceCheckboxes().filter(cb => cb.checked).map(cb => parseInt(cb.dataset.id));
+    if (selectedIds.length === 0) {
+      showToast('Sélectionne au moins un appareil.', 'error');
+      return;
+    }
+    closeModal();
+    if (kind === 'trips') {
+      await CsvIO.exportTrips(selectedIds);
+    } else {
+      await CsvIO.exportMaintenance(selectedIds);
+    }
+  };
+
+  openModal();
+};
+
 // ============================================================
 // EXPORT TRAJETS
 // ============================================================
-CsvIO.exportTrips = async function () {
-  const trips = await EvolveDB.dbGetAll(EvolveDB.STORES.TRIPS);
+// deviceIds : tableau d'ids d'appareils à inclure. Si omis, exporte tous les appareils.
+CsvIO.exportTrips = async function (deviceIds) {
+  const allTrips = await EvolveDB.dbGetAll(EvolveDB.STORES.TRIPS);
   const wheels = await EvolveDB.dbGetAll(EvolveDB.STORES.WHEELS);
+  const devices = await Devices.getAll();
+  const deviceById = new Map(devices.map(d => [d.id, d]));
+
+  const trips = deviceIds ? allTrips.filter(t => deviceIds.includes(t.deviceId)) : allTrips;
 
   if (trips.length === 0) {
     showToast('Aucune sortie à exporter.', 'error');
@@ -71,13 +142,16 @@ CsvIO.exportTrips = async function () {
   }
 
   const sorted = [...trips].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-  const header = ['uuid', 'timestamp', 'batteryStart', 'batteryEnd', 'distanceKm', 'rideType', 'wheelDiameter', 'wheelCharacteristic', 'wheelOffroad'];
+  const header = ['uuid', 'deviceUuid', 'deviceName', 'timestamp', 'batteryStart', 'batteryEnd', 'distanceKm', 'rideType', 'wheelDiameter', 'wheelCharacteristic', 'wheelOffroad'];
   let csv = header.join(CSV_SEP) + '\n';
 
   sorted.forEach(t => {
     const wheel = wheels.find(w => w.id === t.wheelId);
+    const device = deviceById.get(t.deviceId);
     const row = [
       t.uuid || '',
+      device ? device.uuid : '',
+      device ? device.name : '',
       t.timestamp,
       t.batteryStart,
       t.batteryEnd,
@@ -90,14 +164,20 @@ CsvIO.exportTrips = async function () {
     csv += row.map(csvEscape).join(CSV_SEP) + '\n';
   });
 
-  downloadCSV(csv, `evolve_tracker_trajets_${dateStamp()}.csv`);
+  const suffix = deviceIds && deviceIds.length === 1 ? `_${(deviceById.get(deviceIds[0]) || {}).name || ''}`.replace(/[^a-z0-9_]/gi, '') : '';
+  downloadCSV(csv, `ridetracker_trajets${suffix}_${dateStamp()}.csv`);
+  await markExported();
 };
 
 // ============================================================
 // EXPORT INTERVENTIONS
 // ============================================================
-CsvIO.exportMaintenance = async function () {
-  const interventions = await EvolveDB.dbGetAll(EvolveDB.STORES.INTERVENTIONS);
+CsvIO.exportMaintenance = async function (deviceIds) {
+  const allInterventions = await EvolveDB.dbGetAll(EvolveDB.STORES.INTERVENTIONS);
+  const devices = await Devices.getAll();
+  const deviceById = new Map(devices.map(d => [d.id, d]));
+
+  const interventions = deviceIds ? allInterventions.filter(i => deviceIds.includes(i.deviceId)) : allInterventions;
 
   if (interventions.length === 0) {
     showToast('Aucune intervention à exporter.', 'error');
@@ -105,12 +185,15 @@ CsvIO.exportMaintenance = async function () {
   }
 
   const sorted = [...interventions].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-  const header = ['uuid', 'timestamp', 'interventionTypes', 'parts', 'totalBudget', 'generalComment'];
+  const header = ['uuid', 'deviceUuid', 'deviceName', 'timestamp', 'interventionTypes', 'parts', 'totalBudget', 'generalComment'];
   let csv = header.join(CSV_SEP) + '\n';
 
   sorted.forEach(i => {
+    const device = deviceById.get(i.deviceId);
     const row = [
       i.uuid || '',
+      device ? device.uuid : '',
+      device ? device.name : '',
       i.timestamp,
       i.interventionTypes.join('|'),
       JSON.stringify(i.parts),
@@ -120,7 +203,9 @@ CsvIO.exportMaintenance = async function () {
     csv += row.map(csvEscape).join(CSV_SEP) + '\n';
   });
 
-  downloadCSV(csv, `evolve_tracker_entretien_${dateStamp()}.csv`);
+  const suffix = deviceIds && deviceIds.length === 1 ? `_${(deviceById.get(deviceIds[0]) || {}).name || ''}`.replace(/[^a-z0-9_]/gi, '') : '';
+  downloadCSV(csv, `ridetracker_entretien${suffix}_${dateStamp()}.csv`);
+  await markExported();
 };
 
 // ============================================================
@@ -149,6 +234,20 @@ function rowToObject(header, row) {
   const obj = {};
   header.forEach((key, i) => { obj[key] = row[i] !== undefined ? row[i] : ''; });
   return obj;
+}
+
+// Résout l'appareil local correspondant à un deviceUuid importé.
+// CSV pré-3.0 (sans colonne deviceUuid) ou uuid inconnu (install différente) -> appareil actif courant.
+async function resolveImportDeviceId(deviceUuid, devices, currentDeviceId, warnedRef) {
+  if (deviceUuid) {
+    const match = devices.find(d => d.uuid === deviceUuid);
+    if (match) return match.id;
+    if (!warnedRef.shown) {
+      warnedRef.shown = true;
+      showToast('Appareil du CSV introuvable ici : rattaché à l\'appareil actif.', '');
+    }
+  }
+  return currentDeviceId;
 }
 
 // --- Comparaison de deux trajets (hors uuid) pour détecter un vrai conflit ---
@@ -200,6 +299,9 @@ CsvIO.importTrips = async function (file) {
   const existingTrips = await EvolveDB.dbGetAll(EvolveDB.STORES.TRIPS);
   const existingByUuid = new Map(existingTrips.filter(t => t.uuid).map(t => [t.uuid, t]));
   const wheels = await EvolveDB.dbGetAll(EvolveDB.STORES.WHEELS);
+  const devices = await Devices.getAll();
+  const currentDeviceId = await Devices.getCurrentId();
+  const warnedRef = { shown: false };
 
   let added = 0, unchanged = 0;
   const conflicts = [];
@@ -209,22 +311,25 @@ CsvIO.importTrips = async function (file) {
     const obj = rowToObject(header, row);
     if (!obj.uuid) continue; // ligne invalide, ignorée
 
-    // Résout ou crée la roue correspondante par diamètre + caractéristique
+    const resolvedDeviceId = await resolveImportDeviceId(obj.deviceUuid, devices, currentDeviceId, warnedRef);
+
+    // Résout ou crée la roue correspondante par diamètre + caractéristique, scopée à l'appareil résolu
     let wheelId = null;
     if (obj.wheelDiameter && obj.wheelCharacteristic) {
       const diameter = parseFloat(obj.wheelDiameter);
       const offroad = obj.wheelOffroad === '1';
-      let wheel = wheels.find(w => w.diameter === diameter && w.characteristic === obj.wheelCharacteristic && w.offroad === offroad);
+      let wheel = wheels.find(w => w.deviceId === resolvedDeviceId && w.diameter === diameter && w.characteristic === obj.wheelCharacteristic && w.offroad === offroad);
       if (!wheel) {
-        const newId = await EvolveDB.dbAdd(EvolveDB.STORES.WHEELS, { diameter, characteristic: obj.wheelCharacteristic, offroad, isDefault: false });
+        const newId = await EvolveDB.dbAdd(EvolveDB.STORES.WHEELS, { diameter, characteristic: obj.wheelCharacteristic, offroad, isDefault: false, deviceId: resolvedDeviceId });
         wheel = { id: newId };
-        wheels.push({ id: newId, diameter, characteristic: obj.wheelCharacteristic, offroad, isDefault: false });
+        wheels.push({ id: newId, diameter, characteristic: obj.wheelCharacteristic, offroad, isDefault: false, deviceId: resolvedDeviceId });
       }
       wheelId = wheel.id;
     }
 
     const importedTrip = {
       uuid: obj.uuid,
+      deviceId: resolvedDeviceId,
       timestamp: obj.timestamp,
       batteryStart: parseFloat(obj.batteryStart),
       batteryEnd: parseFloat(obj.batteryEnd),
@@ -283,6 +388,9 @@ CsvIO.importMaintenance = async function (file) {
 
   const existingInterventions = await EvolveDB.dbGetAll(EvolveDB.STORES.INTERVENTIONS);
   const existingByUuid = new Map(existingInterventions.filter(i => i.uuid).map(i => [i.uuid, i]));
+  const devices = await Devices.getAll();
+  const currentDeviceId = await Devices.getCurrentId();
+  const warnedRef = { shown: false };
 
   let added = 0, unchanged = 0;
   const conflicts = [];
@@ -292,11 +400,14 @@ CsvIO.importMaintenance = async function (file) {
     const obj = rowToObject(header, row);
     if (!obj.uuid) continue;
 
+    const resolvedDeviceId = await resolveImportDeviceId(obj.deviceUuid, devices, currentDeviceId, warnedRef);
+
     let parts = [];
     try { parts = JSON.parse(obj.parts); } catch (e) { parts = []; }
 
     const importedIntervention = {
       uuid: obj.uuid,
+      deviceId: resolvedDeviceId,
       timestamp: obj.timestamp,
       interventionTypes: obj.interventionTypes ? obj.interventionTypes.split('|') : [],
       parts,

@@ -1,5 +1,5 @@
 // ============================================================
-// EVOLVE TRACKER - Module Trajets
+// RIDE TRACKER - Module Trajets
 // ============================================================
 
 const Trips = {};
@@ -14,28 +14,36 @@ let currentChargeCustomRange = null;
 // ============================================================
 // RIDE EN COURS (démarré sans complétion immédiate)
 // ============================================================
-const RIDE_IN_PROGRESS_KEY = 'current';
+// Depuis le multi-appareil : une entrée possible par appareil (clé = deviceId), pas une seule
+// clé fixe globale. Permet à deux appareils différents d'avoir chacun un ride en attente.
 
-Trips.getRideInProgress = async function () {
+Trips.getRideInProgress = async function (deviceId) {
+  const id = deviceId !== undefined ? deviceId : await Devices.getCurrentId();
+  if (id === null || id === undefined) return null;
   try {
-    return await EvolveDB.dbGet(EvolveDB.STORES.RIDE_IN_PROGRESS, RIDE_IN_PROGRESS_KEY);
+    const rip = await EvolveDB.dbGet(EvolveDB.STORES.RIDE_IN_PROGRESS, id);
+    return rip || null;
   } catch (e) {
     return null;
   }
 };
 
 Trips.saveRideInProgress = async function (data) {
-  data.key = RIDE_IN_PROGRESS_KEY;
+  const deviceId = await Devices.getCurrentId();
+  data.key = deviceId;
+  data.deviceId = deviceId;
   await EvolveDB.dbPut(EvolveDB.STORES.RIDE_IN_PROGRESS, data);
 };
 
-Trips.clearRideInProgress = async function () {
-  await EvolveDB.dbDelete(EvolveDB.STORES.RIDE_IN_PROGRESS, RIDE_IN_PROGRESS_KEY);
+Trips.clearRideInProgress = async function (deviceId) {
+  const id = deviceId !== undefined ? deviceId : await Devices.getCurrentId();
+  await EvolveDB.dbDelete(EvolveDB.STORES.RIDE_IN_PROGRESS, id);
 };
 
 // --- Formulaire "Démarrer un ride" : ne demande que la batterie de départ (+ options) ---
 Trips.openStartRideForm = async function () {
-  const wheels = await EvolveDB.dbGetAll(EvolveDB.STORES.WHEELS);
+  const deviceId = await Devices.getCurrentId();
+  const wheels = (await EvolveDB.dbGetAll(EvolveDB.STORES.WHEELS)).filter(w => w.deviceId === deviceId);
   const rideTypes = await EvolveDB.dbGetAll(EvolveDB.STORES.RIDE_TYPES);
   const defaultWheel = wheels.find(w => w.isDefault) || wheels[0];
 
@@ -61,12 +69,14 @@ Trips.openStartRideForm = async function () {
       </select>
     </div>
 
+    ${wheels.length > 0 ? `
     <div class="form-group">
       <label class="form-label">Roue (optionnel, modifiable à la complétion)</label>
       <select class="form-select" id="start-wheel">
         ${wheels.map(w => `<option value="${w.id}" ${defaultWheel && defaultWheel.id === w.id ? 'selected' : ''}>${w.diameter}mm · ${w.characteristic}${w.offroad ? ' (tout terrain)' : ''}</option>`).join('')}
       </select>
     </div>
+    ` : ''}
 
     <div style="font-size:12.5px;color:var(--text-tertiary);margin-bottom:16px">L'heure de départ est enregistrée automatiquement. Tu complèteras l'arrivée et la distance au retour.</div>
 
@@ -83,7 +93,8 @@ Trips.openStartRideForm = async function () {
       return;
     }
     const rideType = document.getElementById('start-ridetype').value;
-    const wheelId = parseInt(document.getElementById('start-wheel').value);
+    const wheelEl = document.getElementById('start-wheel');
+    const wheelId = wheelEl ? parseInt(wheelEl.value) : null;
     const startTimestamp = new Date().toISOString();
 
     await Trips.saveRideInProgress({ batteryStart, rideType, wheelId, startTimestamp });
@@ -98,7 +109,8 @@ Trips.openStartRideForm = async function () {
 // --- Formulaire de saisie / édition d'un trajet ---
 // options.completingRideInProgress : true si on complète un ride démarré précédemment
 Trips.openTripForm = async function (tripId = null, options = {}) {
-  const wheels = await EvolveDB.dbGetAll(EvolveDB.STORES.WHEELS);
+  const deviceId = await Devices.getCurrentId();
+  const wheels = (await EvolveDB.dbGetAll(EvolveDB.STORES.WHEELS)).filter(w => w.deviceId === deviceId);
   const rideTypes = await EvolveDB.dbGetAll(EvolveDB.STORES.RIDE_TYPES);
   let trip = null;
   if (tripId) trip = await EvolveDB.dbGet(EvolveDB.STORES.TRIPS, tripId);
@@ -152,12 +164,14 @@ Trips.openTripForm = async function (tripId = null, options = {}) {
       </select>
     </div>
 
+    ${wheels.length > 0 ? `
     <div class="form-group">
       <label class="form-label">Roue utilisée</label>
       <select class="form-select" id="trip-wheel">
         ${wheels.map(w => `<option value="${w.id}" ${prefilledWheelId === w.id ? 'selected' : ''}>${w.diameter}mm · ${w.characteristic}${w.offroad ? ' (tout terrain)' : ''}</option>`).join('')}
       </select>
     </div>
+    ` : ''}
 
     ${trip ? `
     <div class="form-group">
@@ -199,7 +213,8 @@ async function saveTripForm(tripId, options = {}) {
   const batteryEnd = parseFloat(document.getElementById('trip-battery-end').value);
   const distanceKm = parseFloat(document.getElementById('trip-distance').value);
   const rideType = document.getElementById('trip-ridetype').value;
-  const wheelId = parseInt(document.getElementById('trip-wheel').value);
+  const wheelEl = document.getElementById('trip-wheel');
+  const wheelId = wheelEl ? parseInt(wheelEl.value) : null;
 
   if (isNaN(batteryStart) || isNaN(batteryEnd) || isNaN(distanceKm)) {
     showToast('Renseigne la batterie de départ, d\'arrivée et la distance.', 'error');
@@ -232,10 +247,12 @@ async function saveTripForm(tripId, options = {}) {
     tripData.id = tripId;
     const existing = await EvolveDB.dbGet(EvolveDB.STORES.TRIPS, tripId);
     tripData.uuid = existing && existing.uuid ? existing.uuid : EvolveDB.generateUUID();
+    tripData.deviceId = existing && existing.deviceId !== undefined ? existing.deviceId : await Devices.getCurrentId();
     await EvolveDB.dbPut(EvolveDB.STORES.TRIPS, tripData);
     showToast('Sortie modifiée', 'success');
   } else {
     tripData.uuid = EvolveDB.generateUUID();
+    tripData.deviceId = await Devices.getCurrentId();
     await EvolveDB.dbAdd(EvolveDB.STORES.TRIPS, tripData);
     showToast(rideInProgress ? 'Ride terminé et enregistré' : 'Sortie enregistrée', 'success');
   }
@@ -280,12 +297,14 @@ Trips.openTripDetail = async function (tripId) {
 
 // --- Rendu Dashboard ---
 Trips.renderDashboard = async function () {
-  const trips = await EvolveDB.dbGetAll(EvolveDB.STORES.TRIPS);
-  const wheels = await EvolveDB.dbGetAll(EvolveDB.STORES.WHEELS);
+  const deviceId = await Devices.getCurrentId();
+  const trips = (await EvolveDB.dbGetAll(EvolveDB.STORES.TRIPS)).filter(t => t.deviceId === deviceId);
+  const wheels = (await EvolveDB.dbGetAll(EvolveDB.STORES.WHEELS)).filter(w => w.deviceId === deviceId);
   const stats = Calc.computeStats(trips);
+  const totalKmWithOffset = await Devices.getTotalKm(deviceId);
 
-  // Indicateur ride en cours, visible uniquement s'il y en a un
-  const rideInProgress = await Trips.getRideInProgress();
+  // Indicateur ride en cours, visible uniquement s'il y en a un pour CET appareil
+  const rideInProgress = await Trips.getRideInProgress(deviceId);
   const ripBanner = document.getElementById('dash-ride-in-progress-banner');
   if (rideInProgress) {
     ripBanner.innerHTML = `
@@ -308,7 +327,7 @@ Trips.renderDashboard = async function () {
     ripBanner.innerHTML = '';
   }
 
-  document.getElementById('dash-total-km').innerHTML = `${stats.totalKm}<span class="unit">km</span>`;
+  document.getElementById('dash-total-km').innerHTML = `${Math.round(totalKmWithOffset * 100) / 100}<span class="unit">km</span>`;
   document.getElementById('dash-total-trips').textContent = stats.totalTrips;
   document.getElementById('dash-avg-consumption').innerHTML = stats.avgConsumptionPerKm !== null ? `${stats.avgConsumptionPerKm}<span class="unit">%/km</span>` : `--<span class="unit">%/km</span>`;
   document.getElementById('dash-avg-range').innerHTML = stats.avgDistancePerPercent !== null ? `${stats.avgDistancePerPercent}<span class="unit">km/%</span>` : `--<span class="unit">km/%</span>`;
@@ -358,7 +377,8 @@ Trips.renderStats = async function () {
     Trips.renderStats();
   });
 
-  const trips = await EvolveDB.dbGetAll(EvolveDB.STORES.TRIPS);
+  const deviceId = await Devices.getCurrentId();
+  const trips = (await EvolveDB.dbGetAll(EvolveDB.STORES.TRIPS)).filter(t => t.deviceId === deviceId);
   const filtered = Calc.filterByPeriod(trips, currentStatsPeriod, currentStatsCustomRange);
   const stats = Calc.computeStats(filtered);
 
@@ -391,7 +411,8 @@ Trips.renderCharge = async function () {
     Trips.renderCharge();
   });
 
-  const trips = await EvolveDB.dbGetAll(EvolveDB.STORES.TRIPS);
+  const deviceId = await Devices.getCurrentId();
+  const trips = (await EvolveDB.dbGetAll(EvolveDB.STORES.TRIPS)).filter(t => t.deviceId === deviceId);
   const allCycles = Calc.detectChargeCycles(trips);
   const filteredCycles = Calc.filterByPeriod(allCycles, currentChargePeriod, currentChargeCustomRange);
 
@@ -432,7 +453,8 @@ Trips.renderCharge = async function () {
 
 // --- Rendu Historique ---
 Trips.renderHistory = async function () {
-  const trips = await EvolveDB.dbGetAll(EvolveDB.STORES.TRIPS);
+  const deviceId = await Devices.getCurrentId();
+  const trips = (await EvolveDB.dbGetAll(EvolveDB.STORES.TRIPS)).filter(t => t.deviceId === deviceId);
   const rideTypes = await EvolveDB.dbGetAll(EvolveDB.STORES.RIDE_TYPES);
 
   const rideTypeSelect = document.getElementById('history-filter-ridetype');

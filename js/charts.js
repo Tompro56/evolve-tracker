@@ -1,5 +1,5 @@
 // ============================================================
-// EVOLVE TRACKER - Module Graphiques SVG (sans dépendance externe)
+// RIDE TRACKER - Module Graphiques SVG (sans dépendance externe)
 // ============================================================
 
 const Charts = {};

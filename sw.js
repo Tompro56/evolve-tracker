@@ -1,18 +1,19 @@
 // ============================================================
-// EVOLVE TRACKER - Service Worker (cache offline + mises à jour)
+// RIDE TRACKER - Service Worker (cache offline + mises à jour)
 // ============================================================
 
 // IMPORTANT : incrémenter CACHE_VERSION à chaque déploiement qui touche CSS/JS.
 // Le bump force la suppression complète de l'ancien cache (event 'activate'),
 // donc un visuel mis à jour ne reste jamais coincé derrière une version en cache.
-const CACHE_VERSION = 'v6';
-const CACHE_NAME = 'evolve-tracker-' + CACHE_VERSION;
+const CACHE_VERSION = 'v7';
+const CACHE_NAME = 'ride-tracker-' + CACHE_VERSION;
 
 const ASSETS = [
   './index.html',
   './manifest.json',
   './css/style.css',
   './js/db.js',
+  './js/devices.js',
   './js/calc.js',
   './js/charts.js',
   './js/i18n.js',
