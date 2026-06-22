@@ -80,7 +80,8 @@ const DICT = {
     nav_settings: 'Réglages',
     start_ride: 'Démarrer un ride',
     log_full_ride: 'Enregistrer un ride complet',
-    finish_ride: 'Terminer le ride en cours'
+    finish_ride: 'Terminer le ride en cours',
+    cancel_ride_in_progress: 'Annuler le ride en cours'
   },
   en: {
     update_available: 'A new version is ready.',
@@ -157,7 +158,8 @@ const DICT = {
     nav_settings: 'Settings',
     start_ride: 'Start a ride',
     log_full_ride: 'Log a full ride',
-    finish_ride: 'Finish current ride'
+    finish_ride: 'Finish current ride',
+    cancel_ride_in_progress: 'Cancel ride in progress'
   }
 };
 

@@ -44,7 +44,7 @@ Settings.renderWheels = async function () {
   });
   container.querySelectorAll('[data-action="delete"]').forEach(btn => {
     btn.onclick = async () => {
-      if (confirm('Supprimer cette roue ? Les trajets existants garderont leur référence.')) {
+      if (await confirmDialog('Supprimer cette roue ? Les trajets existants garderont leur référence.', { confirmLabel: 'Supprimer', danger: true })) {
         await EvolveDB.dbDelete(EvolveDB.STORES.WHEELS, parseInt(btn.dataset.id));
         showToast('Roue supprimée', 'success');
         Settings.renderWheels();
@@ -170,7 +170,7 @@ function renderSimpleList(containerId, items, storeName, refreshCallback) {
   });
   container.querySelectorAll('[data-action="delete"]').forEach(btn => {
     btn.onclick = async () => {
-      if (confirm('Supprimer cet élément ?')) {
+      if (await confirmDialog('Supprimer cet élément ?', { confirmLabel: 'Supprimer', danger: true })) {
         await EvolveDB.dbDelete(storeName, parseInt(btn.dataset.id));
         showToast('Élément supprimé', 'success');
         refreshCallback();

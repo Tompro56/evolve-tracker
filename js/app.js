@@ -95,6 +95,7 @@ function setupFabMenu() {
   const fabMenu = document.getElementById('fab-menu');
   const optionStart = document.getElementById('fab-option-start');
   const optionFull = document.getElementById('fab-option-full');
+  const optionCancel = document.getElementById('fab-option-cancel');
 
   fabBtn.onclick = (e) => {
     e.stopPropagation();
@@ -132,6 +133,12 @@ function setupFabMenu() {
       Trips.openTripForm();
     }
   };
+
+  optionCancel.onclick = async (e) => {
+    e.stopPropagation();
+    closeFabMenu();
+    await cancelRideInProgress();
+  };
 }
 
 function openFabMenu() {
@@ -148,15 +155,33 @@ function closeFabMenu() {
 async function refreshFabLabel() {
   const inProgress = await Trips.getRideInProgress();
   const optionStart = document.getElementById('fab-option-start');
+  const optionCancel = document.getElementById('fab-option-cancel');
   if (inProgress) {
     optionStart.textContent = I18n.t('finish_ride');
     optionStart.classList.add('is-finish');
+    optionCancel.style.display = 'block';
   } else {
     optionStart.textContent = I18n.t('start_ride');
     optionStart.classList.remove('is-finish');
+    optionCancel.style.display = 'none';
   }
 }
 window.refreshFabLabel = refreshFabLabel;
+
+// Annule un ride en cours sans créer de sortie (faux départ, plan annulé).
+// Centralisé ici car appelé à la fois depuis le menu FAB et la bannière dashboard.
+async function cancelRideInProgress() {
+  const confirmed = await confirmDialog(
+    'Annuler ce ride en cours ? La batterie de départ enregistrée sera perdue, aucune sortie ne sera créée.',
+    { confirmLabel: 'Annuler le ride', danger: true }
+  );
+  if (!confirmed) return;
+  await Trips.clearRideInProgress();
+  await refreshFabLabel();
+  showToast('Ride en cours annulé', 'success');
+  await App.refreshCurrentView();
+}
+window.cancelRideInProgress = cancelRideInProgress;
 
 // Alerte si un ride est en cours et que l'utilisateur clique malgré tout sur "Enregistrer un ride complet"
 function confirmDiscardRideInProgress(onConfirm) {
@@ -367,6 +392,44 @@ function setupModalOverlayClose() {
     });
   }
 }
+
+// ============================================================
+// CONFIRM DIALOG CUSTOM (remplace le confirm() natif du navigateur)
+// ============================================================
+// Usage : if (await confirmDialog('Supprimer cette sortie ?', { confirmLabel: 'Supprimer', danger: true })) { ... }
+function confirmDialog(message, options = {}) {
+  return new Promise((resolve) => {
+    const overlay = document.getElementById('confirm-overlay');
+    const dialog = document.getElementById('confirm-dialog');
+
+    dialog.innerHTML = `
+      ${options.title ? `<div class="confirm-title">${options.title}</div>` : ''}
+      <div class="confirm-message">${message}</div>
+      <div class="confirm-actions">
+        <button class="btn btn-secondary flex-1" id="confirm-cancel-btn">${options.cancelLabel || 'Annuler'}</button>
+        <button class="btn ${options.danger ? 'btn-danger' : 'btn-primary'} flex-1" id="confirm-ok-btn">${options.confirmLabel || 'Confirmer'}</button>
+      </div>
+    `;
+
+    const onOverlayClick = (e) => {
+      if (e.target === overlay) cleanup(false);
+    };
+
+    const cleanup = (result) => {
+      overlay.classList.remove('active');
+      overlay.removeEventListener('click', onOverlayClick);
+      dialog.innerHTML = '';
+      resolve(result);
+    };
+
+    document.getElementById('confirm-cancel-btn').onclick = () => cleanup(false);
+    document.getElementById('confirm-ok-btn').onclick = () => cleanup(true);
+    overlay.addEventListener('click', onOverlayClick);
+
+    overlay.classList.add('active');
+  });
+}
+window.confirmDialog = confirmDialog;
 
 window.closeModal = closeModal;
 window.openModal = openModal;

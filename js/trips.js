@@ -176,7 +176,7 @@ Trips.openTripForm = async function (tripId = null, options = {}) {
   document.getElementById('trip-save-btn').onclick = () => saveTripForm(tripId, { completingRideInProgress: options.completingRideInProgress });
   if (trip) {
     document.getElementById('trip-delete-btn').onclick = async () => {
-      if (confirm('Supprimer cette sortie ?')) {
+      if (await confirmDialog('Supprimer cette sortie ?', { confirmLabel: 'Supprimer', danger: true })) {
         await EvolveDB.dbDelete(EvolveDB.STORES.TRIPS, tripId);
         closeModal();
         showToast('Sortie supprimée', 'success');
@@ -295,11 +295,15 @@ Trips.renderDashboard = async function () {
             <div style="font-size:13px;font-weight:600;color:var(--accent-amber)">Ride en cours</div>
             <div style="font-size:12.5px;color:var(--text-secondary);margin-top:2px">Départ à ${Calc.formatDateTime(rideInProgress.startTimestamp)} · ${rideInProgress.batteryStart}%</div>
           </div>
-          <button class="btn btn-primary btn-sm" id="dash-finish-ride-btn">Terminer</button>
+          <div class="flex-row" style="gap:6px">
+            <button class="btn btn-secondary btn-sm" id="dash-cancel-ride-btn">Annuler</button>
+            <button class="btn btn-primary btn-sm" id="dash-finish-ride-btn">Terminer</button>
+          </div>
         </div>
       </div>
     `;
     document.getElementById('dash-finish-ride-btn').onclick = () => Trips.openTripForm(null, { completingRideInProgress: true });
+    document.getElementById('dash-cancel-ride-btn').onclick = () => window.cancelRideInProgress();
   } else {
     ripBanner.innerHTML = '';
   }

@@ -366,6 +366,7 @@
     <div class="fab-menu" id="fab-menu">
       <button class="fab-menu-item" id="fab-option-start" data-i18n="start_ride">Démarrer un ride</button>
       <button class="fab-menu-item" id="fab-option-full" data-i18n="log_full_ride">Enregistrer un ride complet</button>
+      <button class="fab-menu-item is-cancel" id="fab-option-cancel" data-i18n="cancel_ride_in_progress" style="display:none">Annuler le ride en cours</button>
     </div>
   </div>
 
@@ -382,6 +383,11 @@
 <!-- Modal overlay générique (saisie trajet, intervention, etc.) -->
 <div class="modal-overlay" id="modal-overlay">
   <div class="modal-sheet" id="modal-sheet"></div>
+</div>
+
+<!-- Popup de confirmation custom (remplace le confirm() natif du navigateur) -->
+<div class="confirm-overlay" id="confirm-overlay">
+  <div class="confirm-dialog" id="confirm-dialog"></div>
 </div>
 
 <div class="toast" id="toast"></div>

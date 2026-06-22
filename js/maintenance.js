@@ -105,7 +105,7 @@ Maintenance.openInterventionForm = async function (interventionId = null) {
   document.getElementById('int-save-btn').onclick = () => saveInterventionForm(interventionId);
   if (intervention) {
     document.getElementById('int-delete-btn').onclick = async () => {
-      if (confirm('Supprimer cette intervention ?')) {
+      if (await confirmDialog('Supprimer cette intervention ?', { confirmLabel: 'Supprimer', danger: true })) {
         await EvolveDB.dbDelete(EvolveDB.STORES.INTERVENTIONS, interventionId);
         closeModal();
         showToast('Intervention supprimée', 'success');

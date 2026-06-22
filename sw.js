@@ -5,7 +5,7 @@
 // IMPORTANT : incrémenter CACHE_VERSION à chaque déploiement qui touche CSS/JS.
 // Le bump force la suppression complète de l'ancien cache (event 'activate'),
 // donc un visuel mis à jour ne reste jamais coincé derrière une version en cache.
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v6';
 const CACHE_NAME = 'evolve-tracker-' + CACHE_VERSION;
 
 const ASSETS = [
