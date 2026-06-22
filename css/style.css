@@ -58,11 +58,6 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  /* La barre de nav fait environ 54-58px de haut. Le FAB central (54px + bordure)
-     est remonté de 16px et centré sur la barre, donc son sommet dépasse le haut
-     de la barre d'environ 20px. On prend une marge large (40px) pour ne jamais
-     revivre ce débordement, même si le rendu varie légèrement selon l'appareil. */
-  padding-bottom: calc(58px + 40px + var(--safe-bottom));
 }
 
 #app {
@@ -122,7 +117,12 @@ body {
 /* --- Main content --- */
 .view {
   flex: 1;
-  padding: 16px 16px 24px;
+  /* Le padding-bottom doit vivre ici (et non sur body) : body reste calé sur
+     min-height:100vh et son propre padding-bottom est neutralisé dès que le
+     contenu de #app dépasse cette hauteur (overflow visuel, pas de vrai gain
+     de hauteur de scroll). En le mettant sur .view, il s'ajoute réellement à
+     la hauteur de page scrollable et libère le contenu sous le FAB/nav. */
+  padding: 16px 16px calc(58px + 40px + var(--safe-bottom));
   display: none;
   animation: fadeIn 0.18s ease;
 }
