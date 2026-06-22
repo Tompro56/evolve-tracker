@@ -59,6 +59,10 @@ async function renderAllSettings() {
   await Settings.renderRideTypes();
   await Settings.renderInterventionTypes();
   await Settings.renderParts();
+  const footer = document.getElementById('app-version-footer');
+  if (footer && window.APP_VERSION) {
+    footer.textContent = `Evolve Tracker v${window.APP_VERSION}`;
+  }
 }
 
 // --- Onglets (Stats : Ride/Charge, Historique : Ride/Entretien) ---

@@ -58,11 +58,11 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  /* 72px = hauteur de la barre de nav. Le FAB central dépasse d'environ 28px
-     au-dessus de cette barre (taille 54px, remonté de 16px, plus marge de confort),
-     donc le padding doit couvrir la barre ET le sommet du bouton, sinon le dernier
-     élément scrollable reste caché derrière le FAB plutôt que de s'arrêter au-dessus. */
-  padding-bottom: calc(72px + 30px + var(--safe-bottom));
+  /* La barre de nav fait environ 54-58px de haut. Le FAB central (54px + bordure)
+     est remonté de 16px et centré sur la barre, donc son sommet dépasse le haut
+     de la barre d'environ 20px. On prend une marge large (40px) pour ne jamais
+     revivre ce débordement, même si le rendu varie légèrement selon l'appareil. */
+  padding-bottom: calc(58px + 40px + var(--safe-bottom));
 }
 
 #app {
@@ -1049,6 +1049,15 @@ body {
 
 .tab-panel { display: none; }
 .tab-panel.active { display: block; animation: fadeIn 0.18s ease; }
+
+/* --- App version footer --- */
+.app-version-footer {
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  padding: 18px 0 8px;
+}
 
 /* --- Utility --- */
 .text-center { text-align: center; }
