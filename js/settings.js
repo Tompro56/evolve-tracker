@@ -19,7 +19,7 @@ Settings.renderWheels = async function () {
     <div class="settings-list-item">
       <div>
         <div class="label">${w.diameter}mm · ${w.characteristic}${w.isDefault ? '<span class="default-tag">Défaut</span>' : ''}</div>
-        <div class="sublabel">${w.offroad ? 'Tout terrain' : 'Street / route'}</div>
+        <div class="sublabel">${w.usage || 'Route'}</div>
       </div>
       <div class="actions">
         ${!w.isDefault ? `<button class="btn btn-secondary btn-sm btn-icon" data-action="default" data-id="${w.id}" title="Définir par défaut"><svg viewBox="0 0 24 24"><path d="M12 2l3 7 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z" stroke="currentColor" stroke-width="1.6" fill="none"/></svg></button>` : ''}
@@ -58,6 +58,8 @@ Settings.openWheelForm = async function (wheelId = null) {
   const deviceId = await Devices.getCurrentId();
   let wheel = null;
   if (wheelId) wheel = await EvolveDB.dbGet(EvolveDB.STORES.WHEELS, wheelId);
+  const usageTypes = await EvolveDB.dbGetAll(EvolveDB.STORES.WHEEL_TYPES);
+  const currentUsage = wheel ? wheel.usage : null;
 
   const sheet = document.getElementById('modal-sheet');
   sheet.innerHTML = `
@@ -65,9 +67,16 @@ Settings.openWheelForm = async function (wheelId = null) {
       <h2>${wheel ? 'Modifier la roue' : 'Nouvelle roue'}</h2>
       <button class="modal-close" id="wheel-form-close"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
     </div>
-    <div class="checkbox-row" style="margin-bottom:16px">
-      <input type="checkbox" id="wheel-offroad" ${wheel && wheel.offroad ? 'checked' : ''}>
-      <label for="wheel-offroad">Tout terrain (sinon street / route)</label>
+    <div class="form-group">
+      <label class="form-label">Usage</label>
+      <select class="form-input" id="wheel-usage">
+        ${usageTypes.map(t => `<option value="${escapeHtmlSettings(t.name)}" ${t.name === currentUsage ? 'selected' : ''}>${escapeHtmlSettings(t.name)}</option>`).join('')}
+        <option value="__new__">+ Nouvel usage...</option>
+      </select>
+    </div>
+    <div class="form-group hidden" id="wheel-usage-new-group">
+      <label class="form-label">Nom du nouvel usage</label>
+      <input type="text" class="form-input" id="wheel-usage-new-name" placeholder="ex: Slick, Compétition...">
     </div>
     <div class="form-group">
       <label class="form-label">Diamètre</label>
@@ -89,9 +98,28 @@ Settings.openWheelForm = async function (wheelId = null) {
     </div>
   `;
 
+  const usageSelect = document.getElementById('wheel-usage');
+  const usageNewGroup = document.getElementById('wheel-usage-new-group');
+  usageSelect.onchange = () => {
+    usageNewGroup.classList.toggle('hidden', usageSelect.value !== '__new__');
+  };
+
   document.getElementById('wheel-form-close').onclick = closeModal;
   document.getElementById('wheel-save-btn').onclick = async () => {
-    const offroad = document.getElementById('wheel-offroad').checked;
+    let usage = usageSelect.value;
+    if (usage === '__new__') {
+      const newName = document.getElementById('wheel-usage-new-name').value.trim();
+      if (!newName) {
+        showToast("Indique un nom pour le nouvel usage.", 'error');
+        return;
+      }
+      const existing = usageTypes.find(t => t.name.toLowerCase() === newName.toLowerCase());
+      usage = existing ? existing.name : newName;
+      if (!existing) {
+        await EvolveDB.dbAdd(EvolveDB.STORES.WHEEL_TYPES, { name: newName });
+      }
+    }
+
     const diameter = parseFloat(document.getElementById('wheel-diameter').value);
     const characteristic = document.getElementById('wheel-characteristic').value.trim();
     const isDefault = document.getElementById('wheel-default').checked;
@@ -115,7 +143,7 @@ Settings.openWheelForm = async function (wheelId = null) {
       }
     }
 
-    const data = { offroad, diameter, characteristic, isDefault };
+    const data = { usage, diameter, characteristic, isDefault };
     if (wheelId) {
       data.id = wheelId;
       data.deviceId = wheel && wheel.deviceId !== undefined ? wheel.deviceId : deviceId;
@@ -142,6 +170,12 @@ Settings.renderRideTypes = async function () {
 Settings.renderInterventionTypes = async function () {
   const items = await EvolveDB.dbGetAll(EvolveDB.STORES.INTERVENTION_TYPES);
   renderSimpleList('settings-interventiontypes-list', items, EvolveDB.STORES.INTERVENTION_TYPES, Settings.renderInterventionTypes, false);
+};
+
+// --- USAGES DE ROUE (global, partagé entre tous les appareils) ---
+Settings.renderWheelTypes = async function () {
+  const items = await EvolveDB.dbGetAll(EvolveDB.STORES.WHEEL_TYPES);
+  renderSimpleList('settings-wheeltypes-list', items, EvolveDB.STORES.WHEEL_TYPES, Settings.renderWheelTypes, false);
 };
 
 // --- PIÈCES (propres à l'appareil actif) ---
@@ -356,12 +390,10 @@ Settings.openDeviceForm = async function (deviceId = null) {
 // ============================================================
 Settings.renderUserProfile = async function () {
   const riderName = await EvolveDB.dbGet(EvolveDB.STORES.SETTINGS, 'riderName');
-  const riderEmail = await EvolveDB.dbGet(EvolveDB.STORES.SETTINGS, 'riderEmail');
   const exportReminderDays = await EvolveDB.dbGet(EvolveDB.STORES.SETTINGS, 'exportReminderDays');
   const lastExportAt = await EvolveDB.dbGet(EvolveDB.STORES.SETTINGS, 'lastExportAt');
 
   document.getElementById('profile-rider-name').value = riderName ? riderName.value : '';
-  document.getElementById('profile-rider-email').value = riderEmail ? riderEmail.value : '';
   document.getElementById('profile-export-reminder-days').value = exportReminderDays ? exportReminderDays.value : 0;
   document.getElementById('profile-last-export').textContent = lastExportAt && lastExportAt.value
     ? `Dernier export : ${Calc.formatDateTime(lastExportAt.value)}`
@@ -370,12 +402,10 @@ Settings.renderUserProfile = async function () {
 
 Settings.saveUserProfile = async function () {
   const riderName = document.getElementById('profile-rider-name').value.trim();
-  const riderEmail = document.getElementById('profile-rider-email').value.trim();
   let exportReminderDays = parseInt(document.getElementById('profile-export-reminder-days').value);
   if (isNaN(exportReminderDays) || exportReminderDays < 0) exportReminderDays = 0;
 
   await EvolveDB.dbPut(EvolveDB.STORES.SETTINGS, { key: 'riderName', value: riderName });
-  await EvolveDB.dbPut(EvolveDB.STORES.SETTINGS, { key: 'riderEmail', value: riderEmail });
   await EvolveDB.dbPut(EvolveDB.STORES.SETTINGS, { key: 'exportReminderDays', value: exportReminderDays });
   showToast('Profil enregistré', 'success');
   if (window.refreshExportReminder) await window.refreshExportReminder();

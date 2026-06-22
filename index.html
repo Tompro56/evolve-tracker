@@ -335,10 +335,6 @@
             <input type="text" class="form-input" id="profile-rider-name" placeholder="ex: Thomas">
           </div>
           <div class="form-group">
-            <label class="form-label" data-i18n="rider_email">Email</label>
-            <input type="email" class="form-input" id="profile-rider-email" placeholder="ex: toi@exemple.com">
-          </div>
-          <div class="form-group">
             <label class="form-label" data-i18n="export_reminder_days">Rappel d'export (jours, 0 = désactivé)</label>
             <input type="number" class="form-input mono" id="profile-export-reminder-days" min="0" step="1" value="0">
           </div>
@@ -367,6 +363,12 @@
         <div class="panel-title" data-i18n="ride_types">Types de ride</div>
         <div class="panel" id="settings-ridetypes-list"></div>
         <button class="btn btn-secondary btn-block" id="settings-add-ridetype" data-i18n="add_ride_type">+ Ajouter un type de ride</button>
+      </div>
+
+      <div class="settings-section">
+        <div class="panel-title" data-i18n="wheel_types">Usages de roue</div>
+        <div class="panel" id="settings-wheeltypes-list"></div>
+        <button class="btn btn-secondary btn-block" id="settings-add-wheeltype" data-i18n="add_wheel_type">+ Ajouter un usage de roue</button>
       </div>
 
       <div class="settings-section">

@@ -73,7 +73,7 @@ Trips.openStartRideForm = async function () {
     <div class="form-group">
       <label class="form-label">Roue (optionnel, modifiable à la complétion)</label>
       <select class="form-select" id="start-wheel">
-        ${wheels.map(w => `<option value="${w.id}" ${defaultWheel && defaultWheel.id === w.id ? 'selected' : ''}>${w.diameter}mm · ${w.characteristic}${w.offroad ? ' (tout terrain)' : ''}</option>`).join('')}
+        ${wheels.map(w => `<option value="${w.id}" ${defaultWheel && defaultWheel.id === w.id ? 'selected' : ''}>${w.diameter}mm · ${w.characteristic}${w.usage ? ' (' + w.usage + ')' : ''}</option>`).join('')}
       </select>
     </div>
     ` : ''}
@@ -168,7 +168,7 @@ Trips.openTripForm = async function (tripId = null, options = {}) {
     <div class="form-group">
       <label class="form-label">Roue utilisée</label>
       <select class="form-select" id="trip-wheel">
-        ${wheels.map(w => `<option value="${w.id}" ${prefilledWheelId === w.id ? 'selected' : ''}>${w.diameter}mm · ${w.characteristic}${w.offroad ? ' (tout terrain)' : ''}</option>`).join('')}
+        ${wheels.map(w => `<option value="${w.id}" ${prefilledWheelId === w.id ? 'selected' : ''}>${w.diameter}mm · ${w.characteristic}${w.usage ? ' (' + w.usage + ')' : ''}</option>`).join('')}
       </select>
     </div>
     ` : ''}

@@ -135,6 +135,7 @@ async function renderAllSettings() {
   await Settings.renderParts();
   await Settings.renderRideTypes();
   await Settings.renderInterventionTypes();
+  await Settings.renderWheelTypes();
   await Settings.renderDevices();
   await Settings.renderUserProfile();
   const footer = document.getElementById('app-version-footer');
@@ -380,6 +381,7 @@ function setupMaintenanceControls() {
 function setupSettingsControls() {
   document.getElementById('settings-add-wheel').onclick = () => Settings.openWheelForm();
   document.getElementById('settings-add-ridetype').onclick = () => Settings.openSimpleItemFormNew(EvolveDB.STORES.RIDE_TYPES, Settings.renderRideTypes);
+  document.getElementById('settings-add-wheeltype').onclick = () => Settings.openSimpleItemFormNew(EvolveDB.STORES.WHEEL_TYPES, Settings.renderWheelTypes);
   document.getElementById('settings-add-interventiontype').onclick = () => Settings.openSimpleItemFormNew(EvolveDB.STORES.INTERVENTION_TYPES, Settings.renderInterventionTypes);
   document.getElementById('settings-add-part').onclick = () => Settings.openSimpleItemFormNew(EvolveDB.STORES.PARTS, Settings.renderParts);
   document.getElementById('settings-export-csv').onclick = () => CsvIO.openExportDeviceSelector('trips');

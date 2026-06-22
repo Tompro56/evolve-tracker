@@ -1,7 +1,7 @@
 // ============================================================
 // RIDE TRACKER - Module CSV Import/Export (multi-appareil, avec UUID)
 // ============================================================
-// Format trajets : uuid;deviceUuid;timestamp(ISO);batteryStart;batteryEnd;distanceKm;rideType;wheelDiameter;wheelCharacteristic;wheelOffroad
+// Format trajets : uuid;deviceUuid;timestamp(ISO);batteryStart;batteryEnd;distanceKm;rideType;wheelDiameter;wheelCharacteristic;wheelUsage
 // Format interventions : uuid;deviceUuid;timestamp(ISO);interventionTypes(|-separes);parts(JSON);totalBudget;generalComment
 
 const CsvIO = {};
@@ -142,7 +142,7 @@ CsvIO.exportTrips = async function (deviceIds) {
   }
 
   const sorted = [...trips].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-  const header = ['uuid', 'deviceUuid', 'deviceName', 'timestamp', 'batteryStart', 'batteryEnd', 'distanceKm', 'rideType', 'wheelDiameter', 'wheelCharacteristic', 'wheelOffroad'];
+  const header = ['uuid', 'deviceUuid', 'deviceName', 'timestamp', 'batteryStart', 'batteryEnd', 'distanceKm', 'rideType', 'wheelDiameter', 'wheelCharacteristic', 'wheelUsage'];
   let csv = header.join(CSV_SEP) + '\n';
 
   sorted.forEach(t => {
@@ -159,7 +159,7 @@ CsvIO.exportTrips = async function (deviceIds) {
       t.rideType,
       wheel ? wheel.diameter : '',
       wheel ? wheel.characteristic : '',
-      wheel ? (wheel.offroad ? '1' : '0') : ''
+      wheel ? (wheel.usage || '') : ''
     ];
     csv += row.map(csvEscape).join(CSV_SEP) + '\n';
   });
@@ -317,12 +317,13 @@ CsvIO.importTrips = async function (file) {
     let wheelId = null;
     if (obj.wheelDiameter && obj.wheelCharacteristic) {
       const diameter = parseFloat(obj.wheelDiameter);
-      const offroad = obj.wheelOffroad === '1';
-      let wheel = wheels.find(w => w.deviceId === resolvedDeviceId && w.diameter === diameter && w.characteristic === obj.wheelCharacteristic && w.offroad === offroad);
+      // wheelUsage (format actuel, string libre) ou repli sur l'ancien wheelOffroad ('0'/'1', pré-3.1)
+      const usage = obj.wheelUsage ? obj.wheelUsage : (obj.wheelOffroad === '1' ? 'Tout terrain' : 'Route');
+      let wheel = wheels.find(w => w.deviceId === resolvedDeviceId && w.diameter === diameter && w.characteristic === obj.wheelCharacteristic && w.usage === usage);
       if (!wheel) {
-        const newId = await EvolveDB.dbAdd(EvolveDB.STORES.WHEELS, { diameter, characteristic: obj.wheelCharacteristic, offroad, isDefault: false, deviceId: resolvedDeviceId });
+        const newId = await EvolveDB.dbAdd(EvolveDB.STORES.WHEELS, { diameter, characteristic: obj.wheelCharacteristic, usage, isDefault: false, deviceId: resolvedDeviceId });
         wheel = { id: newId };
-        wheels.push({ id: newId, diameter, characteristic: obj.wheelCharacteristic, offroad, isDefault: false, deviceId: resolvedDeviceId });
+        wheels.push({ id: newId, diameter, characteristic: obj.wheelCharacteristic, usage, isDefault: false, deviceId: resolvedDeviceId });
       }
       wheelId = wheel.id;
     }

@@ -3,7 +3,7 @@
 // ============================================================
 
 const DB_NAME = 'EvolveTrackerDB'; // Nom technique conservé pour ne pas casser la migration des installations existantes
-const DB_VERSION = 4; // v2 : uuid. v3 : ride en cours. v4 : multi-appareil (store DEVICES + deviceId sur trips/interventions/wheels/parts)
+const DB_VERSION = 5; // v2 : uuid. v3 : ride en cours. v4 : multi-appareil. v5 : usages de roue administrables (remplace le booléen offroad)
 
 const STORES = {
   TRIPS: 'trips',
@@ -12,6 +12,7 @@ const STORES = {
   INTERVENTIONS: 'interventions',
   RIDE_TYPES: 'rideTypes',
   INTERVENTION_TYPES: 'interventionTypes',
+  WHEEL_TYPES: 'wheelTypes',
   SETTINGS: 'settings',
   RIDE_IN_PROGRESS: 'rideInProgress',
   DEVICES: 'devices'
@@ -91,6 +92,14 @@ function openDB() {
         devicesStore.createIndex('uuid', 'uuid', { unique: true });
       }
 
+      // Usages de roue : liste administrable globale (Tout terrain / Street / Route / ...), remplace
+      // le booléen offroad qui ne permettait que 2 choix. Stocké en string libre sur la roue (pas de
+      // clé étrangère) pour rester cohérent avec rideType/interventionTypes et résister à la suppression
+      // d'un usage de la liste sans casser les roues qui l'utilisaient déjà.
+      if (!db.objectStoreNames.contains(STORES.WHEEL_TYPES)) {
+        db.createObjectStore(STORES.WHEEL_TYPES, { keyPath: 'id', autoIncrement: true });
+      }
+
       // --- Migration v4 : multi-appareil ---
       // Ne s'applique qu'aux installations existantes (oldVersion > 0). Une install neuve (oldVersion === 0)
       // part sans appareil ; initDefaultData() lui en créera un générique vide au premier lancement.
@@ -143,6 +152,24 @@ function openDB() {
           // Appareil actif par défaut
           const settingsStore = tx.objectStore(STORES.SETTINGS);
           settingsStore.put({ key: 'currentDeviceId', value: defaultDeviceId });
+        };
+      }
+
+      // --- Migration v5 : usage de roue en string libre (remplace le booléen offroad) ---
+      if (oldVersion > 0 && oldVersion < 5) {
+        const wheelsStore = tx.objectStore(STORES.WHEELS);
+        const cursorReq = wheelsStore.openCursor();
+        cursorReq.onsuccess = (e) => {
+          const cursor = e.target.result;
+          if (cursor) {
+            const record = cursor.value;
+            if (record.usage === undefined) {
+              record.usage = record.offroad ? 'Tout terrain' : 'Route';
+              delete record.offroad;
+              cursor.update(record);
+            }
+            cursor.continue();
+          }
         };
       }
     };
@@ -296,6 +323,15 @@ async function initDefaultData() {
     const defaultTypes = ['Entretien', 'Remplacement', 'Révision constructeur'];
     for (const it of defaultTypes) {
       await dbAdd(STORES.INTERVENTION_TYPES, { name: it });
+    }
+  }
+
+  // Usages de roue par défaut (global)
+  const existingWheelTypes = await dbGetAll(STORES.WHEEL_TYPES);
+  if (existingWheelTypes.length === 0) {
+    const defaultWheelTypes = ['Tout terrain', 'Street', 'Route'];
+    for (const wt of defaultWheelTypes) {
+      await dbAdd(STORES.WHEEL_TYPES, { name: wt });
     }
   }
 }
