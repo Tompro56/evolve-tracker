@@ -59,21 +59,23 @@
       <div style="font-size:12px;color:var(--text-tertiary);margin-top:6px" id="dash-battery-sublabel" data-i18n="no_trip_recorded">Aucune sortie enregistrée</div>
     </div>
 
-    <div class="stat-grid">
+    <div class="stat-grid stat-grid-paired">
+      <div class="stat-col-header" data-i18n="col_current_week">Semaine en cours</div>
+      <div class="stat-col-header" data-i18n="col_total">Total</div>
       <div class="stat-card">
-        <div class="stat-label" data-i18n="km_week">Km cette semaine</div>
+        <div class="stat-label" data-i18n="metric_km">km</div>
         <div class="stat-value" id="dash-week-km">0<span class="unit">km</span></div>
       </div>
       <div class="stat-card">
-        <div class="stat-label" data-i18n="km_total">Km au total</div>
+        <div class="stat-label" data-i18n="metric_km">km</div>
         <div class="stat-value" id="dash-total-km">0<span class="unit">km</span></div>
       </div>
       <div class="stat-card accent-amber">
-        <div class="stat-label" data-i18n="consumption_week">Conso. moy. semaine</div>
+        <div class="stat-label" data-i18n="avg_consumption">Conso. moy.</div>
         <div class="stat-value" id="dash-week-consumption">--<span class="unit">%/km</span></div>
       </div>
       <div class="stat-card accent-amber">
-        <div class="stat-label" data-i18n="consumption_total">Conso. moy. totale</div>
+        <div class="stat-label" data-i18n="avg_consumption">Conso. moy.</div>
         <div class="stat-value" id="dash-total-consumption">--<span class="unit">%/km</span></div>
       </div>
     </div>
