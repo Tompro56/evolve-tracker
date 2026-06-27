@@ -7,6 +7,6 @@
 // - MINEUR : nouvelle fonctionnalité ou amélioration notable
 // - CORRECTIF : correction de bug, ajustement visuel, retouche mineure
 
-const APP_VERSION = '3.2.1';
+const APP_VERSION = '3.3.0';
 
 window.APP_VERSION = APP_VERSION;

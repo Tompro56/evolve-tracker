@@ -92,23 +92,44 @@ Calc.rideTypeDistribution = function (trips) {
 Calc.detectChargeCycles = function (trips) {
   const sorted = [...trips].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
   const cycles = [];
+  let segmentStart = 0;      // index du 1er trajet du segment menant à la charge courante
+  let prevChargeTs = null;   // timestamp de la charge précédente
 
   for (let i = 1; i < sorted.length; i++) {
     const prev = sorted[i - 1];
     const curr = sorted[i];
     if (curr.batteryStart > prev.batteryEnd) {
+      // Km parcourus depuis la charge précédente = somme des trajets sorted[segmentStart..i-1]
+      let km = 0;
+      for (let j = segmentStart; j <= i - 1; j++) km += sorted[j].distanceKm || 0;
+      const daysSinceLastCharge = prevChargeTs ? (new Date(curr.timestamp) - new Date(prevChargeTs)) / 86400000 : null;
       cycles.push({
         timestamp: curr.timestamp,
         fromPercent: prev.batteryEnd,
         toPercent: curr.batteryStart,
         injected: Math.round((curr.batteryStart - prev.batteryEnd) * 100) / 100,
         afterTripId: prev.id,
-        beforeTripId: curr.id
+        beforeTripId: curr.id,
+        kmSinceLastCharge: Math.round(km * 100) / 100,
+        daysSinceLastCharge: daysSinceLastCharge
       });
+      segmentStart = i;
+      prevChargeTs = curr.timestamp;
     }
   }
 
   return cycles;
+};
+
+// Moyennes globales entre deux charges consécutives (indépendantes de la période).
+// On ne compte que les cycles ayant une charge précédente (daysSinceLastCharge non nul),
+// donc N-1 intervalles pour N charges.
+Calc.avgBetweenCharges = function (cycles) {
+  const withPrev = cycles.filter(c => c.daysSinceLastCharge !== null && c.daysSinceLastCharge !== undefined);
+  if (withPrev.length === 0) return { km: null, days: null };
+  const km = withPrev.reduce((s, c) => s + (c.kmSinceLastCharge || 0), 0) / withPrev.length;
+  const days = withPrev.reduce((s, c) => s + c.daysSinceLastCharge, 0) / withPrev.length;
+  return { km: Math.round(km * 100) / 100, days: Math.round(days * 10) / 10 };
 };
 
 // --- Série temporelle pour graphique kilométrage ---
@@ -205,6 +226,31 @@ Calc.filterTrips = function (trips, filters) {
 };
 
 // --- Tri/filtre interventions ---
+Calc.filterInterventions = function (interventions, filters) {
+  let result = [...interventions];
+  if (!filters) return result;
+
+  if (filters.dateStart) {
+    result = result.filter(i => new Date(i.timestamp) >= new Date(filters.dateStart));
+  }
+  if (filters.dateEnd) {
+    const end = new Date(filters.dateEnd);
+    end.setHours(23, 59, 59, 999);
+    result = result.filter(i => new Date(i.timestamp) <= end);
+  }
+  if (filters.budgetMin !== undefined && filters.budgetMin !== null && filters.budgetMin !== '') {
+    result = result.filter(i => (i.totalBudget || 0) >= parseFloat(filters.budgetMin));
+  }
+  if (filters.budgetMax !== undefined && filters.budgetMax !== null && filters.budgetMax !== '') {
+    result = result.filter(i => (i.totalBudget || 0) <= parseFloat(filters.budgetMax));
+  }
+  if (filters.interventionType) {
+    result = result.filter(i => (i.interventionTypes || []).includes(filters.interventionType));
+  }
+
+  return result;
+};
+
 Calc.sortInterventions = function (interventions, sortBy, order) {
   const sorted = [...interventions];
   sorted.sort((a, b) => {

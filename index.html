@@ -51,12 +51,19 @@
     <div id="dash-ride-in-progress-banner"></div>
 
     <div class="panel">
-      <div class="panel-title" data-i18n="board_status">État de la board</div>
+      <div class="panel-title" data-i18n="board_status">État</div>
       <div class="battery-gauge-row">
         <div class="battery-gauge-track"><div class="battery-gauge-fill" id="dash-battery-fill"></div></div>
         <div class="battery-gauge-value" id="dash-battery-value">--%</div>
       </div>
       <div style="font-size:12px;color:var(--text-tertiary);margin-top:6px" id="dash-battery-sublabel" data-i18n="no_trip_recorded">Aucune sortie enregistrée</div>
+      <div class="autonomy-block">
+        <div class="autonomy-head">
+          <span class="autonomy-label" data-i18n="estimated_range">Autonomie estimée</span>
+          <select class="autonomy-select" id="dash-autonomy-type"></select>
+        </div>
+        <div class="autonomy-value"><span id="dash-autonomy-km">--</span><span class="unit"> km</span></div>
+      </div>
     </div>
 
     <div class="stat-grid stat-grid-paired">
@@ -182,6 +189,17 @@
         <div class="chart-legend" id="chart-charge-legend"></div>
       </div>
 
+      <div class="stat-grid">
+        <div class="stat-card accent-green">
+          <div class="stat-label" data-i18n="avg_km_between_charges">Km moy. entre charges</div>
+          <div class="stat-value" id="charge-avg-km">--<span class="unit">km</span></div>
+        </div>
+        <div class="stat-card accent-green">
+          <div class="stat-label" data-i18n="avg_days_between_charges">Jours moy. entre charges</div>
+          <div class="stat-value" id="charge-avg-days">--<span class="unit">j</span></div>
+        </div>
+      </div>
+
       <div class="panel">
         <div class="panel-title" data-i18n="cycle_history">Historique des cycles</div>
         <div id="charge-list"></div>
@@ -281,7 +299,7 @@
 
       <div class="toolbar-row">
         <button class="btn btn-secondary btn-sm" id="maintenance-sort-btn" data-i18n="sort">Trier</button>
-        <button class="btn btn-primary btn-sm flex-1" id="maintenance-add-btn" data-i18n="new_intervention">+ Nouvelle intervention</button>
+        <button class="btn btn-secondary btn-sm" id="maintenance-filter-btn" data-i18n="filter">Filtrer</button>
       </div>
 
       <div class="filter-panel" id="maintenance-sort-panel">
@@ -296,6 +314,39 @@
         <div class="segmented-control">
           <button class="active" data-order="desc" data-i18n="descending">Décroissant</button>
           <button data-order="asc" data-i18n="ascending">Croissant</button>
+        </div>
+      </div>
+
+      <div class="filter-panel" id="maintenance-filter-panel">
+        <div class="filter-row">
+          <div class="form-group mb-0">
+            <label class="form-label" data-i18n="start_date">Date début</label>
+            <input type="date" class="form-input" id="maintenance-filter-date-start">
+          </div>
+          <div class="form-group mb-0">
+            <label class="form-label" data-i18n="end_date">Date fin</label>
+            <input type="date" class="form-input" id="maintenance-filter-date-end">
+          </div>
+        </div>
+        <div class="filter-row">
+          <div class="form-group mb-0">
+            <label class="form-label" data-i18n="min_budget">Budget min (€)</label>
+            <input type="number" class="form-input mono" id="maintenance-filter-budget-min" step="0.01" min="0">
+          </div>
+          <div class="form-group mb-0">
+            <label class="form-label" data-i18n="max_budget">Budget max (€)</label>
+            <input type="number" class="form-input mono" id="maintenance-filter-budget-max" step="0.01" min="0">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" data-i18n="intervention_type">Type d'intervention</label>
+          <select class="form-select" id="maintenance-filter-type">
+            <option value="" data-i18n="all">Tous</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary flex-1" id="maintenance-filter-reset" data-i18n="reset">Réinitialiser</button>
+          <button class="btn btn-primary flex-1" id="maintenance-filter-apply" data-i18n="apply">Appliquer</button>
         </div>
       </div>
 
@@ -418,6 +469,8 @@
       <button class="fab-menu-item" id="fab-option-start" data-i18n="start_ride">Démarrer un ride</button>
       <button class="fab-menu-item" id="fab-option-full" data-i18n="log_full_ride">Enregistrer un ride complet</button>
       <button class="fab-menu-item is-cancel" id="fab-option-cancel" data-i18n="cancel_ride_in_progress" style="display:none">Annuler le ride en cours</button>
+      <div class="fab-menu-divider"></div>
+      <button class="fab-menu-item" id="fab-option-maintenance" data-i18n="new_maintenance">+ Nouvel entretien</button>
     </div>
   </div>
 

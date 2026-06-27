@@ -294,6 +294,13 @@ body {
   color: var(--accent-red);
 }
 
+.fab-menu-divider {
+  height: 1px;
+  background: var(--border-strong);
+  margin: 2px 14px;
+  opacity: 0.6;
+}
+
 .fab-backdrop {
   position: fixed;
   inset: 0;
@@ -385,6 +392,50 @@ body {
   align-items: center;
   gap: 12px;
   margin-bottom: 4px;
+}
+
+.autonomy-block {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.autonomy-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.autonomy-label {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.autonomy-select {
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  padding: 4px 8px;
+  max-width: 55%;
+}
+
+.autonomy-value {
+  font-family: var(--font-mono);
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--accent-green);
+}
+
+.autonomy-value .unit {
+  font-size: 14px;
+  color: var(--text-tertiary);
 }
 
 .battery-gauge-track {

@@ -6,6 +6,7 @@ const Maintenance = {};
 
 let currentMaintenanceSort = { by: 'date', order: 'desc' };
 let currentMaintenanceSearch = '';
+let currentMaintenanceFilters = {};
 
 // --- Formulaire nouvelle / édition intervention ---
 Maintenance.openInterventionForm = async function (interventionId = null) {
@@ -270,7 +271,15 @@ Maintenance.renderList = async function () {
   const deviceId = await Devices.getCurrentId();
   const interventions = (await EvolveDB.dbGetAll(EvolveDB.STORES.INTERVENTIONS)).filter(i => i.deviceId === deviceId);
 
-  let result = Calc.searchInterventions(interventions, currentMaintenanceSearch);
+  // Peuple le select de type d'intervention du filtre (une seule fois)
+  const typeSelect = document.getElementById('maintenance-filter-type');
+  if (typeSelect && typeSelect.options.length <= 1) {
+    const interventionTypes = await EvolveDB.dbGetAll(EvolveDB.STORES.INTERVENTION_TYPES);
+    typeSelect.innerHTML = `<option value="">${I18n.t('all')}</option>` + interventionTypes.map(it => `<option value="${it.name}">${it.name}</option>`).join('');
+  }
+
+  let result = Calc.filterInterventions(interventions, currentMaintenanceFilters);
+  result = Calc.searchInterventions(result, currentMaintenanceSearch);
   result = Calc.sortInterventions(result, currentMaintenanceSort.by, currentMaintenanceSort.order);
 
   const listContainer = document.getElementById('maintenance-list');

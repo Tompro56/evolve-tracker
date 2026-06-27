@@ -221,6 +221,13 @@ function setupFabMenu() {
     closeFabMenu();
     await cancelRideInProgress();
   };
+
+  const optionMaintenance = document.getElementById('fab-option-maintenance');
+  optionMaintenance.onclick = (e) => {
+    e.stopPropagation();
+    closeFabMenu();
+    Maintenance.openInterventionForm();
+  };
 }
 
 function openFabMenu() {
@@ -349,12 +356,21 @@ function setupHistoryControls() {
   };
 }
 
-// --- Entretien : contrôles tri / recherche / ajout ---
+// --- Entretien : contrôles tri / filtre / recherche ---
 function setupMaintenanceControls() {
   const sortBtn = document.getElementById('maintenance-sort-btn');
+  const filterBtn = document.getElementById('maintenance-filter-btn');
   const sortPanel = document.getElementById('maintenance-sort-panel');
+  const filterPanel = document.getElementById('maintenance-filter-panel');
 
-  sortBtn.onclick = () => sortPanel.classList.toggle('active');
+  sortBtn.onclick = () => {
+    filterPanel.classList.remove('active');
+    sortPanel.classList.toggle('active');
+  };
+  filterBtn.onclick = () => {
+    sortPanel.classList.remove('active');
+    filterPanel.classList.toggle('active');
+  };
 
   document.getElementById('maintenance-sort-by').onchange = (e) => {
     currentMaintenanceSort.by = e.target.value;
@@ -375,7 +391,27 @@ function setupMaintenanceControls() {
     Maintenance.renderList();
   }, 250);
 
-  document.getElementById('maintenance-add-btn').onclick = () => Maintenance.openInterventionForm();
+  document.getElementById('maintenance-filter-apply').onclick = () => {
+    currentMaintenanceFilters = {
+      dateStart: document.getElementById('maintenance-filter-date-start').value || null,
+      dateEnd: document.getElementById('maintenance-filter-date-end').value || null,
+      budgetMin: document.getElementById('maintenance-filter-budget-min').value || null,
+      budgetMax: document.getElementById('maintenance-filter-budget-max').value || null,
+      interventionType: document.getElementById('maintenance-filter-type').value || null
+    };
+    filterPanel.classList.remove('active');
+    Maintenance.renderList();
+  };
+
+  document.getElementById('maintenance-filter-reset').onclick = () => {
+    currentMaintenanceFilters = {};
+    document.getElementById('maintenance-filter-date-start').value = '';
+    document.getElementById('maintenance-filter-date-end').value = '';
+    document.getElementById('maintenance-filter-budget-min').value = '';
+    document.getElementById('maintenance-filter-budget-max').value = '';
+    document.getElementById('maintenance-filter-type').value = '';
+    Maintenance.renderList();
+  };
 }
 
 // --- Paramètres : volets repliables (lot C) ---

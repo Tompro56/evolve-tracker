@@ -369,6 +369,25 @@ Trips.renderDashboard = async function () {
   } else {
     currentWheelContainer.innerHTML = `<span class="detail-label">Roue par défaut</span><span class="detail-value">Aucune</span>`;
   }
+
+  // Autonomie estimée = batterie restante (dernière sortie) × km par % moyens.
+  // "Tout" = moyenne globale ; un type = moyenne sur les sorties de ce type.
+  const rideTypes = await EvolveDB.dbGetAll(EvolveDB.STORES.RIDE_TYPES);
+  const autoSelect = document.getElementById('dash-autonomy-type');
+  autoSelect.innerHTML = `<option value="">${I18n.t('autonomy_all')}</option>` + rideTypes.map(rt => `<option value="${rt.name}">${rt.name}</option>`).join('');
+  const computeAutonomy = (type) => {
+    if (!lastTrip) return null;
+    const subset = type ? trips.filter(t => t.rideType === type) : trips;
+    const s = Calc.computeStats(subset);
+    if (s.avgDistancePerPercent === null) return null;
+    return Math.round(lastTrip.batteryEnd * s.avgDistancePerPercent * 10) / 10;
+  };
+  const updateAutonomy = () => {
+    const v = computeAutonomy(autoSelect.value || null);
+    document.getElementById('dash-autonomy-km').textContent = v !== null ? v : '--';
+  };
+  autoSelect.onchange = updateAutonomy;
+  updateAutonomy();
 };
 
 // --- Rendu Stats & graphiques ---
@@ -420,6 +439,11 @@ Trips.renderCharge = async function () {
   const totalInjected = filteredCycles.reduce((sum, c) => sum + c.injected, 0);
   document.getElementById('charge-count').textContent = filteredCycles.length;
   document.getElementById('charge-total-injected').innerHTML = `${Math.round(totalInjected * 10) / 10}<span class="unit">%</span>`;
+
+  // Tuiles moyennes : globales, non influencées par le sélecteur de période.
+  const avg = Calc.avgBetweenCharges(allCycles);
+  document.getElementById('charge-avg-km').innerHTML = avg.km !== null ? `${avg.km}<span class="unit">km</span>` : `--<span class="unit">km</span>`;
+  document.getElementById('charge-avg-days').innerHTML = avg.days !== null ? `${avg.days}<span class="unit">j</span>` : `--<span class="unit">j</span>`;
 
   const series = Calc.chargeTimeSeries(filteredCycles);
   Charts.chargeBandChart(document.getElementById('chart-charge'), series, { legendContainer: document.getElementById('chart-charge-legend') });
