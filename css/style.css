@@ -289,7 +289,7 @@ body {
 }
 
 .fab-menu-item.is-cancel {
-  background: transparent;
+  background: var(--bg-panel-raised);
   border-color: var(--accent-red);
   color: var(--accent-red);
 }
@@ -299,6 +299,45 @@ body {
   background: var(--border-strong);
   margin: 2px 14px;
   opacity: 0.6;
+}
+
+.changelog-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  color: var(--accent-amber);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.changelog-body {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.changelog-entry {
+  margin-bottom: 16px;
+}
+
+.changelog-version {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-amber);
+  margin-bottom: 6px;
+}
+
+.changelog-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.changelog-list li {
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  line-height: 1.45;
 }
 
 .fab-backdrop {

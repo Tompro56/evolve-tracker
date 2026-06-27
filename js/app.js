@@ -141,8 +141,33 @@ async function renderAllSettings() {
   await Settings.renderUserProfile();
   const footer = document.getElementById('app-version-footer');
   if (footer && window.APP_VERSION) {
-    footer.textContent = `Ride Tracker v${window.APP_VERSION}`;
+    footer.innerHTML = `Ride Tracker v${window.APP_VERSION} · <button class="changelog-link" id="changelog-link" data-i18n="whats_new">${I18n.t('whats_new')}</button>`;
+    const link = document.getElementById('changelog-link');
+    if (link) link.onclick = showChangelog;
   }
+}
+
+// Modal de synthèse des nouveautés, alimentée par window.APP_CHANGELOG.
+function showChangelog() {
+  const sheet = document.getElementById('modal-sheet');
+  const entries = window.APP_CHANGELOG || [];
+  const body = entries.map(e => `
+    <div class="changelog-entry">
+      <div class="changelog-version">v${e.version}</div>
+      <ul class="changelog-list">
+        ${e.changes.map(c => `<li>${c}</li>`).join('')}
+      </ul>
+    </div>
+  `).join('');
+  sheet.innerHTML = `
+    <div class="modal-header">
+      <h2>${I18n.t('whats_new_title')}</h2>
+      <button class="modal-close" id="changelog-close"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="changelog-body">${body}</div>
+  `;
+  document.getElementById('changelog-close').onclick = closeModal;
+  openModal();
 }
 
 // --- Onglets génériques (Stats : Ride/Charge, Historique : Ride/Entretien, Réglages : Appareil/Utilisateur) ---

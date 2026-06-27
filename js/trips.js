@@ -438,7 +438,8 @@ Trips.renderCharge = async function () {
 
   const totalInjected = filteredCycles.reduce((sum, c) => sum + c.injected, 0);
   document.getElementById('charge-count').textContent = filteredCycles.length;
-  document.getElementById('charge-total-injected').innerHTML = `${Math.round(totalInjected * 10) / 10}<span class="unit">%</span>`;
+  const avgInjection = filteredCycles.length ? totalInjected / filteredCycles.length : 0;
+  document.getElementById('charge-avg-injection').innerHTML = `${Math.round(avgInjection * 10) / 10}<span class="unit">%</span>`;
 
   // Tuiles moyennes : globales, non influencées par le sélecteur de période.
   const avg = Calc.avgBetweenCharges(allCycles);
