@@ -44,13 +44,19 @@ Maintenance.openInterventionForm = async function (interventionId = null) {
           <p style="margin:0">Aucune pièce configurée pour cet appareil. Ajoute-les dans Réglages &gt; Appareil pour pouvoir les associer ici (facultatif).</p>
         </div>
       ` : `
+      <div class="parts-select-actions">
+        <button type="button" class="btn-link" id="int-parts-select-all">Tout sélectionner</button>
+        <button type="button" class="btn-link" id="int-parts-deselect-all">Tout désélectionner</button>
+      </div>
       <div class="checkbox-list" id="int-parts-list">
         ${parts.map(p => {
           const existing = selectedParts.find(sp => sp.partName === p.name);
+          const hasContent = existing && ((existing.budget !== undefined && existing.budget !== null && existing.budget !== '') || (existing.comment && existing.comment.trim() !== ''));
           return `
           <div class="checkbox-row">
             <input type="checkbox" class="part-checkbox" id="int-part-${p.id}" value="${p.name}" ${existing ? 'checked' : ''}>
             <label for="int-part-${p.id}">${p.name}</label>
+            <button type="button" class="part-details-toggle${existing ? '' : ' hidden'}" data-part-id="${p.id}" aria-expanded="false">détails<span class="part-filled-dot${hasContent ? '' : ' hidden'}"></span></button>
           </div>
           <div class="part-detail-fields hidden" id="part-detail-${p.id}" style="padding-left:29px;margin-bottom:10px">
             <div class="form-group mb-0" style="margin-bottom:8px">
@@ -86,15 +92,45 @@ Maintenance.openInterventionForm = async function (interventionId = null) {
     </div>
   `;
 
-  // Affiche/cache les champs détail par partie selon la case cochée
+  // La case ne déploie plus les champs : elle montre/masque seulement le lien "détails".
+  // Le déploiement des champs budget/commentaire passe uniquement par ce lien, par pièce.
   parts.forEach(p => {
     const checkbox = document.getElementById(`int-part-${p.id}`);
     const detailFields = document.getElementById(`part-detail-${p.id}`);
-    if (checkbox.checked) detailFields.classList.remove('hidden');
+    const toggle = sheet.querySelector(`.part-details-toggle[data-part-id="${p.id}"]`);
+    if (!checkbox || !toggle) return;
+
     checkbox.onchange = () => {
-      detailFields.classList.toggle('hidden', !checkbox.checked);
+      if (checkbox.checked) {
+        toggle.classList.remove('hidden');
+      } else {
+        toggle.classList.add('hidden');
+        detailFields.classList.add('hidden');
+        toggle.setAttribute('aria-expanded', 'false');
+      }
+    };
+
+    toggle.onclick = () => {
+      const nowHidden = detailFields.classList.toggle('hidden');
+      toggle.setAttribute('aria-expanded', String(!nowHidden));
     };
   });
+
+  // Sélection groupée : coche/décoche tout sans déployer aucun champ.
+  const selectAllBtn = document.getElementById('int-parts-select-all');
+  const deselectAllBtn = document.getElementById('int-parts-deselect-all');
+  if (selectAllBtn) selectAllBtn.onclick = () => {
+    parts.forEach(p => {
+      const cb = document.getElementById(`int-part-${p.id}`);
+      if (cb && !cb.checked) { cb.checked = true; cb.onchange(); }
+    });
+  };
+  if (deselectAllBtn) deselectAllBtn.onclick = () => {
+    parts.forEach(p => {
+      const cb = document.getElementById(`int-part-${p.id}`);
+      if (cb && cb.checked) { cb.checked = false; cb.onchange(); }
+    });
+  };
 
   // Compteur de caractères
   sheet.querySelectorAll('.comment-input').forEach(textarea => {
@@ -249,6 +285,8 @@ Maintenance.renderList = async function () {
   listContainer.innerHTML = result.map(i => {
     const badgeClass = i.interventionTypes.includes('Remplacement') ? 'badge-remplacement' : i.interventionTypes.includes('Révision constructeur') ? 'badge-revision' : 'badge-entretien';
     const partsNames = i.parts.map(p => p.partName).join(', ');
+    const comment = (i.generalComment || '').trim();
+    const budgetHtml = i.totalBudget > 0 ? `<span class="item-card-budget">${i.totalBudget.toFixed(2)} €</span>` : '';
     return `
       <div class="item-card" data-intervention-id="${i.id}">
         <div class="item-card-top">
@@ -256,9 +294,10 @@ Maintenance.renderList = async function () {
           <span class="item-card-badge ${badgeClass}">${i.interventionTypes[0]}${i.interventionTypes.length > 1 ? ' +' + (i.interventionTypes.length - 1) : ''}</span>
         </div>
         <div class="item-card-main">${partsNames}</div>
+        ${comment ? `<div class="item-card-comment">${escapeHtml(comment)}</div>` : ''}
         <div class="item-card-row">
           <span>${i.parts.length} partie${i.parts.length > 1 ? 's' : ''}</span>
-          <span class="item-card-budget">${i.totalBudget.toFixed(2)} €</span>
+          ${budgetHtml}
         </div>
       </div>
     `;

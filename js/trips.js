@@ -327,10 +327,11 @@ Trips.renderDashboard = async function () {
     ripBanner.innerHTML = '';
   }
 
+  const weekStats = Calc.computeStats(Calc.filterByPeriod(trips, 'week'));
+  document.getElementById('dash-week-km').innerHTML = `${weekStats.totalKm}<span class="unit">km</span>`;
   document.getElementById('dash-total-km').innerHTML = `${Math.round(totalKmWithOffset * 100) / 100}<span class="unit">km</span>`;
-  document.getElementById('dash-total-trips').textContent = stats.totalTrips;
-  document.getElementById('dash-avg-consumption').innerHTML = stats.avgConsumptionPerKm !== null ? `${stats.avgConsumptionPerKm}<span class="unit">%/km</span>` : `--<span class="unit">%/km</span>`;
-  document.getElementById('dash-avg-range').innerHTML = stats.avgDistancePerPercent !== null ? `${stats.avgDistancePerPercent}<span class="unit">km/%</span>` : `--<span class="unit">km/%</span>`;
+  document.getElementById('dash-week-consumption').innerHTML = weekStats.avgConsumptionPerKm !== null ? `${weekStats.avgConsumptionPerKm}<span class="unit">%/km</span>` : `--<span class="unit">%/km</span>`;
+  document.getElementById('dash-total-consumption').innerHTML = stats.avgConsumptionPerKm !== null ? `${stats.avgConsumptionPerKm}<span class="unit">%/km</span>` : `--<span class="unit">%/km</span>`;
 
   // Batterie actuelle estimée = batterie d'arrivée de la dernière sortie
   const sorted = [...trips].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));

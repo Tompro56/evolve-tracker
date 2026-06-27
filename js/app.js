@@ -18,6 +18,7 @@ App.init = async function () {
   setupHistoryControls();
   setupMaintenanceControls();
   setupSettingsControls();
+  setupSettingsAccordions();
   setupCsvImportExport();
   setupLanguageSelector();
   setupInstallPrompt();
@@ -375,6 +376,17 @@ function setupMaintenanceControls() {
   }, 250);
 
   document.getElementById('maintenance-add-btn').onclick = () => Maintenance.openInterventionForm();
+}
+
+// --- Paramètres : volets repliables (lot C) ---
+// Repliés par défaut, sans mémorisation entre visites. Les listes internes
+// sont re-rendues sans toucher au .panel-title, donc le câblage survit.
+function setupSettingsAccordions() {
+  document.querySelectorAll('#view-settings .settings-section').forEach(section => {
+    section.classList.add('collapsed');
+    const title = section.querySelector('.panel-title');
+    if (title) title.onclick = () => section.classList.toggle('collapsed');
+  });
 }
 
 // --- Paramètres : contrôles ajout ---

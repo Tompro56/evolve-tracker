@@ -614,6 +614,45 @@ body {
 
 .checkbox-list .checkbox-row:last-child { border-bottom: none; }
 
+.parts-select-actions {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent-amber);
+  cursor: pointer;
+}
+
+.part-details-toggle {
+  margin-left: auto;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-amber);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.part-filled-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-green);
+  display: inline-block;
+}
+
 /* --- Liste items / vignettes --- */
 .item-card {
   background: var(--bg-panel);
@@ -666,6 +705,15 @@ body {
   color: var(--text-primary);
   font-weight: 500;
   margin-bottom: 4px;
+}
+
+.item-card-comment {
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .item-card-budget {
@@ -1184,3 +1232,34 @@ body {
 .flex-row { display: flex; align-items: center; gap: 10px; }
 .flex-1 { flex: 1; }
 .hidden { display: none !important; }
+
+/* --- Volets repliables des paramètres (lot C) --- */
+#view-settings .settings-section > .panel-title {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+}
+
+#view-settings .settings-section > .panel-title::after {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--text-tertiary);
+  border-bottom: 2px solid var(--text-tertiary);
+  transform: rotate(45deg);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+  margin-left: 8px;
+  margin-bottom: 3px;
+}
+
+#view-settings .settings-section.collapsed > .panel-title::after {
+  transform: rotate(-45deg);
+  margin-bottom: 0;
+}
+
+#view-settings .settings-section.collapsed > :not(.panel-title) {
+  display: none;
+}
