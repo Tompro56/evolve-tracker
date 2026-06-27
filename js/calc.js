@@ -286,4 +286,88 @@ Calc.searchInterventions = function (interventions, query) {
   });
 };
 
+// --- Fil d'activités unifié (rides + charges) ---
+// Normalise rides et charges en items comparables. Chaque item porte une distance
+// et une consommation pour que les filtres et tris s'appliquent aux deux.
+// Charge : distance = km depuis la dernière charge, consommation = % injecté.
+Calc.buildActivities = function (trips, cycles) {
+  const rides = (trips || []).map(t => ({
+    kind: 'ride',
+    timestamp: t.timestamp,
+    distance: t.distanceKm || 0,
+    consumption: (t.batteryStart || 0) - (t.batteryEnd || 0),
+    rideType: t.rideType || '',
+    raw: t
+  }));
+  const charges = (cycles || []).map(c => ({
+    kind: 'charge',
+    timestamp: c.timestamp,
+    distance: c.kmSinceLastCharge || 0,
+    consumption: c.injected || 0,
+    rideType: null,
+    raw: c
+  }));
+  return rides.concat(charges);
+};
+
+Calc.filterActivities = function (items, filters) {
+  let result = [...items];
+  filters = filters || {};
+  const showRides = filters.showRides !== false;
+  const showCharges = filters.showCharges !== false;
+  result = result.filter(it => (it.kind === 'ride' ? showRides : showCharges));
+
+  if (filters.dateStart) {
+    const s = new Date(filters.dateStart);
+    result = result.filter(it => new Date(it.timestamp) >= s);
+  }
+  if (filters.dateEnd) {
+    const e = new Date(filters.dateEnd);
+    e.setHours(23, 59, 59, 999);
+    result = result.filter(it => new Date(it.timestamp) <= e);
+  }
+  if (filters.distanceMin !== undefined && filters.distanceMin !== null && filters.distanceMin !== '') {
+    result = result.filter(it => it.distance >= parseFloat(filters.distanceMin));
+  }
+  if (filters.distanceMax !== undefined && filters.distanceMax !== null && filters.distanceMax !== '') {
+    result = result.filter(it => it.distance <= parseFloat(filters.distanceMax));
+  }
+  if (filters.consumptionMin !== undefined && filters.consumptionMin !== null && filters.consumptionMin !== '') {
+    result = result.filter(it => it.consumption >= parseFloat(filters.consumptionMin));
+  }
+  if (filters.consumptionMax !== undefined && filters.consumptionMax !== null && filters.consumptionMax !== '') {
+    result = result.filter(it => it.consumption <= parseFloat(filters.consumptionMax));
+  }
+  // Le type de ride ne concerne que les rides : il exclut donc les charges.
+  if (filters.rideType) {
+    result = result.filter(it => it.kind === 'ride' && it.rideType === filters.rideType);
+  }
+  return result;
+};
+
+Calc.sortActivities = function (items, sortBy, order) {
+  const sorted = [...items];
+  const dir = order === 'asc' ? 1 : -1;
+  sorted.sort((a, b) => {
+    if (sortBy === 'rideType') {
+      // Les charges (sans type) se rangent toujours en fin, classées par date entre elles.
+      const aNull = a.rideType === null, bNull = b.rideType === null;
+      if (aNull && !bNull) return 1;
+      if (!aNull && bNull) return -1;
+      if (aNull && bNull) return new Date(b.timestamp) - new Date(a.timestamp);
+      if (a.rideType < b.rideType) return -dir;
+      if (a.rideType > b.rideType) return dir;
+      return 0;
+    }
+    let va, vb;
+    if (sortBy === 'distance') { va = a.distance; vb = b.distance; }
+    else if (sortBy === 'consumption') { va = a.consumption; vb = b.consumption; }
+    else { va = new Date(a.timestamp).getTime(); vb = new Date(b.timestamp).getTime(); }
+    if (va < vb) return -dir;
+    if (va > vb) return dir;
+    return 0;
+  });
+  return sorted;
+};
+
 window.Calc = Calc;

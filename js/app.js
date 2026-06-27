@@ -362,7 +362,9 @@ function setupHistoryControls() {
       distanceMax: document.getElementById('history-filter-dist-max').value || null,
       consumptionMin: document.getElementById('history-filter-cons-min').value || null,
       consumptionMax: document.getElementById('history-filter-cons-max').value || null,
-      rideType: document.getElementById('history-filter-ridetype').value || null
+      rideType: document.getElementById('history-filter-ridetype').value || null,
+      showRides: document.getElementById('history-filter-show-rides').checked,
+      showCharges: document.getElementById('history-filter-show-charges').checked
     };
     filterPanel.classList.remove('active');
     Trips.renderHistory();
@@ -377,6 +379,8 @@ function setupHistoryControls() {
     document.getElementById('history-filter-cons-min').value = '';
     document.getElementById('history-filter-cons-max').value = '';
     document.getElementById('history-filter-ridetype').value = '';
+    document.getElementById('history-filter-show-rides').checked = true;
+    document.getElementById('history-filter-show-charges').checked = true;
     Trips.renderHistory();
   };
 }

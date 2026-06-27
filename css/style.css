@@ -871,6 +871,57 @@ body {
   text-align: right;
 }
 
+.trip-item.charge-item {
+  border-color: var(--accent-green);
+  cursor: default;
+  align-items: flex-start;
+}
+
+.trip-item.charge-item .trip-km.charge-injected {
+  color: var(--accent-green);
+}
+
+.charge-km-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 3px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
+
+.charge-km-line .charge-arrow {
+  width: 13px;
+  height: 13px;
+  color: var(--text-tertiary);
+}
+
+.charge-km-line .charge-plug {
+  width: 14px;
+  height: 14px;
+}
+
+.checkbox-inline-row {
+  display: flex;
+  gap: 18px;
+}
+
+.checkbox-inline {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.checkbox-inline input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent-amber);
+}
+
 .trip-item .trip-km .unit { font-size: 11px; color: var(--text-tertiary); font-weight: 400; }
 
 /* --- Empty state --- */

@@ -449,23 +449,6 @@ Trips.renderCharge = async function () {
   const series = Calc.chargeTimeSeries(filteredCycles);
   Charts.chargeBandChart(document.getElementById('chart-charge'), series, { legendContainer: document.getElementById('chart-charge-legend') });
 
-  const listContainer = document.getElementById('charge-list');
-  if (filteredCycles.length === 0) {
-    listContainer.innerHTML = `<div class="empty-state"><p>Aucun cycle de charge sur cette période.</p></div>`;
-  } else {
-    const sorted = [...filteredCycles].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    listContainer.innerHTML = sorted.map(c => `
-      <div class="trip-item" style="cursor:default">
-        <div class="trip-icon"><svg viewBox="0 0 24 24"><path d="M13 2L4.5 13H11l-1 9 8.5-11H12l1-9z" stroke="var(--accent-green)" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-        <div class="trip-info">
-          <div class="trip-date">${Calc.formatDateTime(c.timestamp)}</div>
-          <div class="trip-meta">${c.fromPercent}% → ${c.toPercent}%</div>
-        </div>
-        <div class="trip-km">+${c.injected}<span class="unit"> %</span></div>
-      </div>
-    `).join('');
-  }
-
   document.getElementById('charge-apply-range').onclick = () => {
     const start = document.getElementById('charge-range-start').value;
     const end = document.getElementById('charge-range-end').value;
@@ -477,37 +460,61 @@ Trips.renderCharge = async function () {
   };
 };
 
-// --- Rendu Historique ---
+// --- Rendu Historique / Activités (rides + charges fusionnés) ---
 Trips.renderHistory = async function () {
   const deviceId = await Devices.getCurrentId();
   const trips = (await EvolveDB.dbGetAll(EvolveDB.STORES.TRIPS)).filter(t => t.deviceId === deviceId);
   const rideTypes = await EvolveDB.dbGetAll(EvolveDB.STORES.RIDE_TYPES);
+  const cycles = Calc.detectChargeCycles(trips);
 
   const rideTypeSelect = document.getElementById('history-filter-ridetype');
   if (rideTypeSelect.options.length <= 1) {
-    rideTypeSelect.innerHTML = `<option value="">Tous</option>` + rideTypes.map(rt => `<option value="${rt.name}">${rt.name}</option>`).join('');
+    rideTypeSelect.innerHTML = `<option value="">${I18n.t('all')}</option>` + rideTypes.map(rt => `<option value="${rt.name}">${rt.name}</option>`).join('');
   }
 
-  let result = Calc.filterTrips(trips, currentHistoryFilters);
+  let items = Calc.buildActivities(trips, cycles);
+  items = Calc.filterActivities(items, currentHistoryFilters);
 
   const query = document.getElementById('history-search').value;
   if (query && query.trim() !== '') {
     const q = query.toLowerCase();
-    result = result.filter(t => (t.rideType || '').toLowerCase().includes(q) || String(t.distanceKm).includes(q));
+    items = items.filter(it => {
+      if (it.kind === 'ride') return (it.rideType || '').toLowerCase().includes(q) || String(it.raw.distanceKm).includes(q);
+      return 'charge'.includes(q) || String(it.raw.fromPercent).includes(q) || String(it.raw.toPercent).includes(q);
+    });
   }
 
-  result = Calc.sortTrips(result, currentHistorySort.by, currentHistorySort.order);
+  items = Calc.sortActivities(items, currentHistorySort.by, currentHistorySort.order);
 
   const listContainer = document.getElementById('history-list');
-  if (result.length === 0) {
+  if (items.length === 0) {
     listContainer.innerHTML = `<div class="empty-state">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M12 7v5l3 3" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>
-      <p>Aucune sortie ne correspond.</p>
+      <p>Aucune activité ne correspond.</p>
     </div>`;
-  } else {
-    listContainer.innerHTML = result.map(t => {
-      const consumption = (t.batteryStart - t.batteryEnd).toFixed(1);
+    return;
+  }
+
+  const plugSvg = `<svg class="charge-plug" viewBox="0 0 24 24"><path d="M9 2v6M15 2v6M7 8h10v3a5 5 0 01-10 0V8zM12 16v4" stroke="var(--accent-green)" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const arrowSvg = `<svg class="charge-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+  listContainer.innerHTML = items.map(it => {
+    if (it.kind === 'charge') {
+      const c = it.raw;
       return `
+      <div class="trip-item charge-item">
+        <div class="trip-icon"><svg viewBox="0 0 24 24"><path d="M13 2L4.5 13H11l-1 9 8.5-11H12l1-9z" stroke="var(--accent-green)" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="trip-info">
+          <div class="trip-date">${Calc.formatDateTime(c.timestamp)}</div>
+          <div class="trip-meta">${c.fromPercent}% → ${c.toPercent}%</div>
+          <div class="charge-km-line">${c.kmSinceLastCharge} km ${arrowSvg} ${plugSvg}</div>
+        </div>
+        <div class="trip-km charge-injected">+${c.injected}<span class="unit"> %</span></div>
+      </div>`;
+    }
+    const t = it.raw;
+    const consumption = (t.batteryStart - t.batteryEnd).toFixed(1);
+    return `
       <div class="trip-item" data-trip-id="${t.id}">
         <div class="trip-icon"><svg viewBox="0 0 24 24"><path d="M5 17h14M7 17l2-7h6l2 7M9 10V7a3 3 0 016 0v3" stroke="var(--accent-amber)" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
         <div class="trip-info">
@@ -515,14 +522,12 @@ Trips.renderHistory = async function () {
           <div class="trip-meta">${t.rideType} · ${t.batteryStart}% → ${t.batteryEnd}% (-${consumption}%)</div>
         </div>
         <div class="trip-km">${t.distanceKm}<span class="unit"> km</span></div>
-      </div>
-    `;
-    }).join('');
+      </div>`;
+  }).join('');
 
-    listContainer.querySelectorAll('.trip-item').forEach(el => {
-      el.onclick = () => Trips.openTripDetail(parseInt(el.dataset.tripId));
-    });
-  }
+  listContainer.querySelectorAll('.trip-item[data-trip-id]').forEach(el => {
+    el.onclick = () => Trips.openTripDetail(parseInt(el.dataset.tripId));
+  });
 };
 
 // --- Sélecteur de période réutilisable ---

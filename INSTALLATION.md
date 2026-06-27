@@ -1,83 +1,50 @@
-// ============================================================
-// RIDE TRACKER - Module Appareils (multi-appareil)
-// ============================================================
-// Chaque appareil possède son propre historique (trips, interventions), ses propres
-// roues et pièces. Seuls les types de ride/intervention et le profil utilisateur sont globaux.
+# Evolve Tracker — Guide d'installation
 
-const Devices = {};
+## Le point critique : héberger les fichiers
 
-Devices.getAll = async function () {
-  const devices = await EvolveDB.dbGetAll(EvolveDB.STORES.DEVICES);
-  return devices.sort((a, b) => (a.id || 0) - (b.id || 0));
-};
+Une PWA doit être servie via HTTP(S), pas ouverte en double-clic depuis le téléphone (`file://`). Sans ça, le service worker ne s'enregistre pas et IndexedDB peut être restreint sur certains navigateurs Android.
 
-Devices.get = async function (id) {
-  return await EvolveDB.dbGet(EvolveDB.STORES.DEVICES, id);
-};
+Trois options, de la plus simple à la plus robuste :
 
-Devices.create = async function (data) {
-  data.uuid = EvolveDB.generateUUID();
-  data.createdAt = new Date().toISOString();
-  if (data.initialKm === undefined || data.initialKm === null || isNaN(data.initialKm)) data.initialKm = 0;
-  return await EvolveDB.dbAdd(EvolveDB.STORES.DEVICES, data);
-};
+### Option 1 — GitHub Pages (gratuit, recommandé)
+1. Crée un repo GitHub, dézippe `evolve-tracker.zip` dedans, push.
+2. Dans les Settings du repo > Pages > active GitHub Pages sur la branche main.
+3. L'URL fournie (`https://tonpseudo.github.io/evolve-tracker/`) est ton lien d'installation.
 
-Devices.update = async function (data) {
-  return await EvolveDB.dbPut(EvolveDB.STORES.DEVICES, data);
-};
+### Option 2 — Netlify Drop
+1. Va sur https://app.netlify.com/drop
+2. Glisse le dossier dézippé (pas le zip).
+3. Tu récupères une URL immédiatement.
 
-// Supprime un appareil et TOUTES ses données associées (trips, interventions, roues, pièces,
-// ride en cours). Irréversible. Refuse de supprimer le dernier appareil restant.
-Devices.deleteCascade = async function (deviceId) {
-  const all = await Devices.getAll();
-  if (all.length <= 1) {
-    throw new Error('CANNOT_DELETE_LAST_DEVICE');
-  }
+### Option 3 — Hébergement perso / NAS
+Si tu as déjà un NAS exposé en HTTPS (tu en as un, l'Ugreen DXP), dépose le contenu du dossier dans un répertoire web et expose-le. Vérifie juste que le certificat HTTPS est valide, sinon le service worker refuse de s'enregistrer sur certains Android.
 
-  for (const storeName of [EvolveDB.STORES.TRIPS, EvolveDB.STORES.INTERVENTIONS, EvolveDB.STORES.WHEELS, EvolveDB.STORES.PARTS]) {
-    const records = await EvolveDB.dbGetAll(storeName);
-    for (const r of records) {
-      if (r.deviceId === deviceId) {
-        await EvolveDB.dbDelete(storeName, r.id);
-      }
-    }
-  }
+## Installation sur Android
 
-  // Ride en cours de cet appareil, le cas échéant (delete sur clé absente ne lève pas d'erreur)
-  await EvolveDB.dbDelete(EvolveDB.STORES.RIDE_IN_PROGRESS, deviceId);
+1. Ouvre l'URL dans **Chrome** (pas dans une app tierce).
+2. Une bannière "Installer l'application" apparaît automatiquement, ou via le menu (trois points) > "Installer l'application" / "Ajouter à l'écran d'accueil".
+3. Valide. L'icône apparaît sur l'écran d'accueil, ouverture en plein écran sans barre d'adresse.
 
-  await EvolveDB.dbDelete(EvolveDB.STORES.DEVICES, deviceId);
+Comme l'app est servie depuis ta propre origine (pas forms.microsoft.com), il n'y a aucune couche d'authentification SSO entre le raccourci et le contenu. Tap = app ouverte directement sur le dashboard.
 
-  const currentId = await Devices.getCurrentId();
-  if (currentId === deviceId) {
-    const remaining = await Devices.getAll();
-    await Devices.setCurrentId(remaining[0].id);
-  }
-};
+## Persistance des données
 
-Devices.getCurrentId = async function () {
-  const setting = await EvolveDB.dbGet(EvolveDB.STORES.SETTINGS, 'currentDeviceId');
-  return setting ? setting.value : null;
-};
+Les données vivent dans IndexedDB, isolé du cache navigateur classique. Un nettoyage de cache standard ("vider le cache" dans les paramètres Chrome) ne les supprime pas. Seules deux actions les effacent : désinstaller l'app / vider les données du site explicitement dans les paramètres Chrome, ou un reset complet du téléphone.
 
-Devices.getCurrent = async function () {
-  const id = await Devices.getCurrentId();
-  if (id === null || id === undefined) return null;
-  return await Devices.get(id);
-};
+Pour une sécurité supplémentaire, exporte régulièrement en CSV (page Paramètres) et garde une copie ailleurs (Drive, mail).
 
-Devices.setCurrentId = async function (id) {
-  await EvolveDB.dbPut(EvolveDB.STORES.SETTINGS, { key: 'currentDeviceId', value: id });
-};
+## Mises à jour de l'app
 
-// --- Total kilométrage d'un appareil : trajets enregistrés + kilométrage initial (occasion) ---
-Devices.getTotalKm = async function (deviceId) {
-  const device = await Devices.get(deviceId);
-  const trips = await EvolveDB.dbGetAll(EvolveDB.STORES.TRIPS);
-  const tripsKm = trips
-    .filter(t => t.deviceId === deviceId)
-    .reduce((sum, t) => sum + (t.distanceKm || 0), 0);
-  return (device && device.initialKm ? device.initialKm : 0) + tripsKm;
-};
+Après un push sur GitHub, chaque téléphone qui ouvre l'app détecte la nouvelle version en arrière-plan. Un bandeau apparaît en haut de l'écran avec un bouton "Redémarrer". Au clic, la nouvelle version s'active et la page se recharge. Les données IndexedDB ne sont jamais affectées par une mise à jour.
 
-window.Devices = Devices;
+## Bandeau d'installation
+
+À la première visite via l'URL (avant installation), un bandeau propose d'installer l'app directement. Il peut être refermé sans installer ; il réapparaîtra aux prochaines visites tant que l'app n'est pas installée.
+
+## Mode "Démarrer un ride"
+
+Le bouton + central propose deux options : démarrer un ride (juste la batterie de départ, à compléter au retour) ou enregistrer un ride complet directement. Un seul ride peut être en attente à la fois ; un indicateur apparaît sur le dashboard tant qu'il n'est pas complété.
+
+## Première utilisation
+
+Les roues, types de ride, types d'intervention et parties du skate sont déjà pré-remplis avec des valeurs par défaut cohérentes (tes 3 profils de roues, cruise/vitesse, etc.). Tu peux tout modifier depuis Paramètres.

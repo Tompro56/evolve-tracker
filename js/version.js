@@ -7,13 +7,22 @@
 // - MINEUR : nouvelle fonctionnalité ou amélioration notable
 // - CORRECTIF : correction de bug, ajustement visuel, retouche mineure
 
-const APP_VERSION = '3.4.0';
+const APP_VERSION = '3.5.0';
 
 window.APP_VERSION = APP_VERSION;
 
 // Synthèse des améliorations par version (du plus récent au plus ancien).
 // Affichée via le lien "détails" sous la version, dans les paramètres.
 window.APP_CHANGELOG = [
+  {
+    version: '3.5.0',
+    changes: [
+      "Onglet « Activités » : les charges apparaissent dans le fil avec les rides, bordure verte",
+      "Chaque charge affiche les km parcourus depuis la charge précédente",
+      "Filtre du fil : cases Rides et Charges, et filtres date/distance/conso appliqués aux deux",
+      "Historique des charges retiré des stats (désormais dans le fil)"
+    ]
+  },
   {
     version: '3.4.0',
     changes: [

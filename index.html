@@ -1,373 +1,513 @@
-// ============================================================
-// RIDE TRACKER - Module Calculs & Agrégations
-// ============================================================
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Ride Tracker</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0d0f0e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ride Tracker">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" href="icons/icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
 
-const Calc = {};
+<header class="app-header">
+  <div class="brand"><span class="pulse-dot"></span>RIDE TRACKER</div>
+  <select class="device-switcher" id="device-switcher"></select>
+</header>
 
-// --- Filtrage par période ---
-// period: 'total' | 'day' | 'week' | 'month' | 'custom'
-// customRange: {start: Date, end: Date} si period === 'custom'
-Calc.filterByPeriod = function (trips, period, customRange) {
-  if (period === 'total') return trips;
+<div class="update-banner" id="update-banner">
+  <span data-i18n="update_available">Une nouvelle version est prête.</span>
+  <button class="btn btn-primary btn-sm" onclick="applyUpdate()" data-i18n="restart">Redémarrer</button>
+</div>
 
-  const now = new Date();
-  let start, end;
+<!-- Bandeau d'installation PWA -->
+<div class="install-banner" id="install-banner">
+  <span data-i18n="install_prompt">Installe l'application pour un accès direct hors ligne.</span>
+  <div class="flex-row" style="gap:8px">
+    <button class="btn btn-primary btn-sm" id="install-confirm-btn" data-i18n="install">Installer</button>
+    <button class="modal-close" id="install-dismiss-btn"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+  </div>
+</div>
 
-  if (period === 'day') {
-    start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-  } else if (period === 'week') {
-    const dayOfWeek = now.getDay() === 0 ? 6 : now.getDay() - 1; // lundi = 0
-    start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek);
-    start.setHours(0, 0, 0, 0);
-    end = new Date(start);
-    end.setDate(start.getDate() + 6);
-    end.setHours(23, 59, 59, 999);
-  } else if (period === 'month') {
-    start = new Date(now.getFullYear(), now.getMonth(), 1);
-    end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-  } else if (period === 'custom' && customRange) {
-    start = new Date(customRange.start);
-    start.setHours(0, 0, 0, 0);
-    end = new Date(customRange.end);
-    end.setHours(23, 59, 59, 999);
-  } else {
-    return trips;
-  }
+<!-- Rappel d'export périodique (configurable dans Réglages > Utilisateur, jamais automatique) -->
+<div class="export-reminder-banner" id="export-reminder-banner">
+  <span data-i18n="export_reminder_text">Pense à exporter tes données en sauvegarde.</span>
+  <div class="flex-row" style="gap:8px">
+    <button class="btn btn-primary btn-sm" id="export-reminder-export-btn" data-i18n="export_trips">Exporter trajets en CSV</button>
+    <button class="modal-close" id="export-reminder-dismiss-btn"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+  </div>
+</div>
 
-  return trips.filter(t => {
-    const ts = new Date(t.timestamp);
-    return ts >= start && ts <= end;
-  });
-};
+<div id="app">
 
-// --- Stats globales sur un ensemble de trajets ---
-Calc.computeStats = function (trips) {
-  if (!trips || trips.length === 0) {
-    return {
-      totalKm: 0,
-      totalTrips: 0,
-      avgConsumptionPerKm: null, // % par km
-      avgDistancePerPercent: null, // km par %
-      totalBatteryUsed: 0
-    };
-  }
+  <!-- ============ DASHBOARD ============ -->
+  <section class="view active" id="view-dashboard">
+    <div id="dash-ride-in-progress-banner"></div>
 
-  let totalKm = 0;
-  let totalBatteryUsed = 0;
+    <div class="panel">
+      <div class="panel-title" data-i18n="board_status">État</div>
+      <div class="battery-gauge-row">
+        <div class="battery-gauge-track"><div class="battery-gauge-fill" id="dash-battery-fill"></div></div>
+        <div class="battery-gauge-value" id="dash-battery-value">--%</div>
+      </div>
+      <div style="font-size:12px;color:var(--text-tertiary);margin-top:6px" id="dash-battery-sublabel" data-i18n="no_trip_recorded">Aucune sortie enregistrée</div>
+      <div class="autonomy-block">
+        <div class="autonomy-head">
+          <span class="autonomy-label" data-i18n="estimated_range">Autonomie estimée</span>
+          <select class="autonomy-select" id="dash-autonomy-type"></select>
+        </div>
+        <div class="autonomy-value"><span id="dash-autonomy-km">--</span><span class="unit"> km</span></div>
+      </div>
+    </div>
 
-  trips.forEach(t => {
-    const km = t.distanceKm || 0;
-    const used = Math.max(0, (t.batteryStart || 0) - (t.batteryEnd || 0));
-    totalKm += km;
-    totalBatteryUsed += used;
-  });
+    <div class="stat-grid stat-grid-paired">
+      <div class="stat-col-header" data-i18n="col_current_week">Semaine en cours</div>
+      <div class="stat-col-header" data-i18n="col_total">Total</div>
+      <div class="stat-card">
+        <div class="stat-label" data-i18n="metric_km">km</div>
+        <div class="stat-value" id="dash-week-km">0<span class="unit">km</span></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label" data-i18n="metric_km">km</div>
+        <div class="stat-value" id="dash-total-km">0<span class="unit">km</span></div>
+      </div>
+      <div class="stat-card accent-amber">
+        <div class="stat-label" data-i18n="avg_consumption">Conso. moy.</div>
+        <div class="stat-value" id="dash-week-consumption">--<span class="unit">%/km</span></div>
+      </div>
+      <div class="stat-card accent-amber">
+        <div class="stat-label" data-i18n="avg_consumption">Conso. moy.</div>
+        <div class="stat-value" id="dash-total-consumption">--<span class="unit">%/km</span></div>
+      </div>
+    </div>
 
-  const avgConsumptionPerKm = totalKm > 0 ? totalBatteryUsed / totalKm : null;
-  const avgDistancePerPercent = totalBatteryUsed > 0 ? totalKm / totalBatteryUsed : null;
+    <div class="panel">
+      <div class="panel-title" data-i18n="last_trip">Dernière sortie</div>
+      <div id="dash-last-trip"></div>
+    </div>
 
-  return {
-    totalKm: Math.round(totalKm * 100) / 100,
-    totalTrips: trips.length,
-    avgConsumptionPerKm: avgConsumptionPerKm !== null ? Math.round(avgConsumptionPerKm * 1000) / 1000 : null,
-    avgDistancePerPercent: avgDistancePerPercent !== null ? Math.round(avgDistancePerPercent * 100) / 100 : null,
-    totalBatteryUsed: Math.round(totalBatteryUsed * 100) / 100
-  };
-};
+    <div class="panel">
+      <div class="panel-title" data-i18n="active_config">Configuration active</div>
+      <div id="dash-current-wheel" class="detail-row"></div>
+    </div>
+  </section>
 
-// --- Répartition par type de ride (pour le disque) ---
-Calc.rideTypeDistribution = function (trips) {
-  const dist = {};
-  trips.forEach(t => {
-    const type = t.rideType || 'Non défini';
-    if (!dist[type]) dist[type] = { count: 0, km: 0 };
-    dist[type].count += 1;
-    dist[type].km += (t.distanceKm || 0);
-  });
-  return dist;
-};
+  <!-- ============ STATS (onglets Ride / Charge) ============ -->
+  <section class="view" id="view-stats">
+    <div class="page-header"><h1 data-i18n="stats_charts">Stats & graphiques</h1></div>
 
-// --- Détection des cycles de charge ---
-// Une charge est détectée quand batteryStart d'un trajet > batteryEnd du trajet précédent (par ordre chronologique)
-Calc.detectChargeCycles = function (trips) {
-  const sorted = [...trips].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-  const cycles = [];
-  let segmentStart = 0;      // index du 1er trajet du segment menant à la charge courante
-  let prevChargeTs = null;   // timestamp de la charge précédente
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="ride" data-tabgroup="stats" data-panel="stats-tab-ride" data-i18n="tab_ride">Ride</button>
+      <button class="tab-btn" data-tab="charge" data-tabgroup="stats" data-panel="stats-tab-charge" data-i18n="tab_charge">Charge</button>
+    </div>
 
-  for (let i = 1; i < sorted.length; i++) {
-    const prev = sorted[i - 1];
-    const curr = sorted[i];
-    if (curr.batteryStart > prev.batteryEnd) {
-      // Km parcourus depuis la charge précédente = somme des trajets sorted[segmentStart..i-1]
-      let km = 0;
-      for (let j = segmentStart; j <= i - 1; j++) km += sorted[j].distanceKm || 0;
-      const daysSinceLastCharge = prevChargeTs ? (new Date(curr.timestamp) - new Date(prevChargeTs)) / 86400000 : null;
-      cycles.push({
-        timestamp: curr.timestamp,
-        fromPercent: prev.batteryEnd,
-        toPercent: curr.batteryStart,
-        injected: Math.round((curr.batteryStart - prev.batteryEnd) * 100) / 100,
-        afterTripId: prev.id,
-        beforeTripId: curr.id,
-        kmSinceLastCharge: Math.round(km * 100) / 100,
-        daysSinceLastCharge: daysSinceLastCharge
-      });
-      segmentStart = i;
-      prevChargeTs = curr.timestamp;
-    }
-  }
+    <!-- Onglet Ride -->
+    <div class="tab-panel active" id="stats-tab-ride">
+      <div class="period-selector" id="stats-period-selector"></div>
+      <div class="filter-panel" id="stats-custom-range">
+        <div class="filter-row">
+          <div class="form-group mb-0">
+            <label class="form-label" data-i18n="from">Du</label>
+            <input type="date" class="form-input" id="stats-range-start">
+          </div>
+          <div class="form-group mb-0">
+            <label class="form-label" data-i18n="to">Au</label>
+            <input type="date" class="form-input" id="stats-range-end">
+          </div>
+        </div>
+        <button class="btn btn-primary btn-block btn-sm" id="stats-apply-range" data-i18n="apply">Appliquer</button>
+      </div>
 
-  return cycles;
-};
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-label" data-i18n="period_km">Km période</div>
+          <div class="stat-value" id="stats-period-km">0<span class="unit">km</span></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label" data-i18n="trips">Sorties</div>
+          <div class="stat-value" id="stats-period-trips">0</div>
+        </div>
+        <div class="stat-card accent-amber">
+          <div class="stat-label" data-i18n="avg_consumption">Conso. moy.</div>
+          <div class="stat-value" id="stats-period-consumption">--<span class="unit">%/km</span></div>
+        </div>
+        <div class="stat-card accent-green">
+          <div class="stat-label" data-i18n="distance_per_pct">Distance / %</div>
+          <div class="stat-value" id="stats-period-range">--<span class="unit">km/%</span></div>
+        </div>
+      </div>
 
-// Moyennes globales entre deux charges consécutives (indépendantes de la période).
-// On ne compte que les cycles ayant une charge précédente (daysSinceLastCharge non nul),
-// donc N-1 intervalles pour N charges.
-Calc.avgBetweenCharges = function (cycles) {
-  const withPrev = cycles.filter(c => c.daysSinceLastCharge !== null && c.daysSinceLastCharge !== undefined);
-  if (withPrev.length === 0) return { km: null, days: null };
-  const km = withPrev.reduce((s, c) => s + (c.kmSinceLastCharge || 0), 0) / withPrev.length;
-  const days = withPrev.reduce((s, c) => s + c.daysSinceLastCharge, 0) / withPrev.length;
-  return { km: Math.round(km * 100) / 100, days: Math.round(days * 10) / 10 };
-};
+      <div class="panel">
+        <div class="panel-title" data-i18n="mileage">Kilométrage</div>
+        <div class="chart-container" id="chart-km"></div>
+      </div>
 
-// --- Série temporelle pour graphique kilométrage ---
-Calc.kmTimeSeries = function (trips) {
-  const sorted = [...trips].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-  return sorted.map(t => ({
-    timestamp: t.timestamp,
-    km: t.distanceKm || 0,
-    rideType: t.rideType
-  }));
-};
+      <div class="panel">
+        <div class="panel-title" data-i18n="ride_distribution">Répartition par type de ride</div>
+        <div class="chart-container donut" id="chart-donut"></div>
+        <div class="chart-legend" id="chart-donut-legend"></div>
+      </div>
+    </div>
 
-// --- Série temporelle pour graphique cycles de charge (fluctuation haute/basse) ---
-// Pour chaque cycle: low = % avant charge, high = % après charge
-Calc.chargeTimeSeries = function (cycles) {
-  return cycles.map(c => ({
-    timestamp: c.timestamp,
-    low: c.fromPercent,
-    high: c.toPercent,
-    injected: c.injected
-  }));
-};
+    <!-- Onglet Charge -->
+    <div class="tab-panel" id="stats-tab-charge">
+      <div class="period-selector" id="charge-period-selector"></div>
+      <div class="filter-panel" id="charge-custom-range">
+        <div class="filter-row">
+          <div class="form-group mb-0">
+            <label class="form-label" data-i18n="from">Du</label>
+            <input type="date" class="form-input" id="charge-range-start">
+          </div>
+          <div class="form-group mb-0">
+            <label class="form-label" data-i18n="to">Au</label>
+            <input type="date" class="form-input" id="charge-range-end">
+          </div>
+        </div>
+        <button class="btn btn-primary btn-block btn-sm" id="charge-apply-range" data-i18n="apply">Appliquer</button>
+      </div>
 
-// --- Formatage date/heure FR ---
-Calc.formatDateTime = function (isoString) {
-  const d = new Date(isoString);
-  return d.toLocaleString('fr-FR', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit'
-  });
-};
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-label" data-i18n="cycles">Cycles</div>
+          <div class="stat-value" id="charge-count">0</div>
+        </div>
+        <div class="stat-card accent-green">
+          <div class="stat-label" data-i18n="avg_injection">Injection moyenne</div>
+          <div class="stat-value" id="charge-avg-injection">0<span class="unit">%</span></div>
+        </div>
+      </div>
 
-Calc.formatDate = function (isoString) {
-  const d = new Date(isoString);
-  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-};
+      <div class="panel">
+        <div class="panel-title" data-i18n="fluctuation_per_cycle">Fluctuation par cycle</div>
+        <div class="chart-container" id="chart-charge"></div>
+        <div class="chart-legend" id="chart-charge-legend"></div>
+      </div>
 
-// --- Tri générique ---
-Calc.sortTrips = function (trips, sortBy, order) {
-  const sorted = [...trips];
-  sorted.sort((a, b) => {
-    let valA, valB;
-    if (sortBy === 'date') {
-      valA = new Date(a.timestamp).getTime();
-      valB = new Date(b.timestamp).getTime();
-    } else if (sortBy === 'distance') {
-      valA = a.distanceKm || 0;
-      valB = b.distanceKm || 0;
-    } else if (sortBy === 'consumption') {
-      valA = (a.batteryStart || 0) - (a.batteryEnd || 0);
-      valB = (b.batteryStart || 0) - (b.batteryEnd || 0);
-    } else if (sortBy === 'rideType') {
-      valA = (a.rideType || '').toLowerCase();
-      valB = (b.rideType || '').toLowerCase();
-    } else {
-      return 0;
-    }
-    if (valA < valB) return order === 'asc' ? -1 : 1;
-    if (valA > valB) return order === 'asc' ? 1 : -1;
-    return 0;
-  });
-  return sorted;
-};
+      <div class="stat-grid">
+        <div class="stat-card accent-green">
+          <div class="stat-label" data-i18n="avg_km_between_charges">Km moy. entre charges</div>
+          <div class="stat-value" id="charge-avg-km">--<span class="unit">km</span></div>
+        </div>
+        <div class="stat-card accent-green">
+          <div class="stat-label" data-i18n="avg_days_between_charges">Jours moy. entre charges</div>
+          <div class="stat-value" id="charge-avg-days">--<span class="unit">j</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
 
-// --- Filtre générique trajets ---
-Calc.filterTrips = function (trips, filters) {
-  let result = [...trips];
+  <!-- ============ HISTORIQUE (onglets Ride / Entretien) ============ -->
+  <section class="view" id="view-history">
+    <div class="page-header"><h1 data-i18n="history">Historique</h1></div>
 
-  if (filters.dateStart) {
-    result = result.filter(t => new Date(t.timestamp) >= new Date(filters.dateStart));
-  }
-  if (filters.dateEnd) {
-    const end = new Date(filters.dateEnd);
-    end.setHours(23, 59, 59, 999);
-    result = result.filter(t => new Date(t.timestamp) <= end);
-  }
-  if (filters.distanceMin !== undefined && filters.distanceMin !== null && filters.distanceMin !== '') {
-    result = result.filter(t => (t.distanceKm || 0) >= parseFloat(filters.distanceMin));
-  }
-  if (filters.distanceMax !== undefined && filters.distanceMax !== null && filters.distanceMax !== '') {
-    result = result.filter(t => (t.distanceKm || 0) <= parseFloat(filters.distanceMax));
-  }
-  if (filters.rideType) {
-    result = result.filter(t => t.rideType === filters.rideType);
-  }
-  if (filters.consumptionMin !== undefined && filters.consumptionMin !== null && filters.consumptionMin !== '') {
-    result = result.filter(t => ((t.batteryStart || 0) - (t.batteryEnd || 0)) >= parseFloat(filters.consumptionMin));
-  }
-  if (filters.consumptionMax !== undefined && filters.consumptionMax !== null && filters.consumptionMax !== '') {
-    result = result.filter(t => ((t.batteryStart || 0) - (t.batteryEnd || 0)) <= parseFloat(filters.consumptionMax));
-  }
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="ride" data-tabgroup="history" data-panel="history-tab-ride" data-i18n="tab_activities">Activités</button>
+      <button class="tab-btn" data-tab="maintenance" data-tabgroup="history" data-panel="history-tab-maintenance" data-i18n="tab_maintenance">Entretien</button>
+    </div>
 
-  return result;
-};
+    <!-- Onglet Ride -->
+    <div class="tab-panel active" id="history-tab-ride">
+      <div class="search-bar">
+        <svg viewBox="0 0 24 24"><path d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+        <input type="text" id="history-search" data-i18n-placeholder="search_placeholder" placeholder="Rechercher...">
+      </div>
 
-// --- Tri/filtre interventions ---
-Calc.filterInterventions = function (interventions, filters) {
-  let result = [...interventions];
-  if (!filters) return result;
+      <div class="toolbar-row">
+        <button class="btn btn-secondary btn-sm" id="history-sort-btn" data-i18n="sort">Trier</button>
+        <button class="btn btn-secondary btn-sm" id="history-filter-btn" data-i18n="filter">Filtrer</button>
+      </div>
 
-  if (filters.dateStart) {
-    result = result.filter(i => new Date(i.timestamp) >= new Date(filters.dateStart));
-  }
-  if (filters.dateEnd) {
-    const end = new Date(filters.dateEnd);
-    end.setHours(23, 59, 59, 999);
-    result = result.filter(i => new Date(i.timestamp) <= end);
-  }
-  if (filters.budgetMin !== undefined && filters.budgetMin !== null && filters.budgetMin !== '') {
-    result = result.filter(i => (i.totalBudget || 0) >= parseFloat(filters.budgetMin));
-  }
-  if (filters.budgetMax !== undefined && filters.budgetMax !== null && filters.budgetMax !== '') {
-    result = result.filter(i => (i.totalBudget || 0) <= parseFloat(filters.budgetMax));
-  }
-  if (filters.interventionType) {
-    result = result.filter(i => (i.interventionTypes || []).includes(filters.interventionType));
-  }
+      <div class="filter-panel" id="history-sort-panel">
+        <div class="form-group">
+          <label class="form-label" data-i18n="sort_by">Trier par</label>
+          <select class="form-select" id="history-sort-by">
+            <option value="date" data-i18n="date">Date</option>
+            <option value="distance" data-i18n="distance">Distance</option>
+            <option value="consumption" data-i18n="battery_consumption">Consommation batterie</option>
+            <option value="rideType" data-i18n="ride_type">Type de ride</option>
+          </select>
+        </div>
+        <div class="segmented-control">
+          <button class="active" data-order="desc" data-i18n="descending">Décroissant</button>
+          <button data-order="asc" data-i18n="ascending">Croissant</button>
+        </div>
+      </div>
 
-  return result;
-};
+      <div class="filter-panel" id="history-filter-panel">
+        <div class="filter-row">
+          <div class="form-group mb-0">
+            <label class="form-label" data-i18n="start_date">Date début</label>
+            <input type="date" class="form-input" id="history-filter-date-start">
+          </div>
+          <div class="form-group mb-0">
+            <label class="form-label" data-i18n="end_date">Date fin</label>
+            <input type="date" class="form-input" id="history-filter-date-end">
+          </div>
+        </div>
+        <div class="filter-row">
+          <div class="form-group mb-0">
+            <label class="form-label" data-i18n="min_distance">Distance min (km)</label>
+            <input type="number" class="form-input mono" id="history-filter-dist-min" step="0.1">
+          </div>
+          <div class="form-group mb-0">
+            <label class="form-label" data-i18n="max_distance">Distance max (km)</label>
+            <input type="number" class="form-input mono" id="history-filter-dist-max" step="0.1">
+          </div>
+        </div>
+        <div class="filter-row">
+          <div class="form-group mb-0">
+            <label class="form-label" data-i18n="min_consumption">Conso min (%)</label>
+            <input type="number" class="form-input mono" id="history-filter-cons-min" step="0.1">
+          </div>
+          <div class="form-group mb-0">
+            <label class="form-label" data-i18n="max_consumption">Conso max (%)</label>
+            <input type="number" class="form-input mono" id="history-filter-cons-max" step="0.1">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" data-i18n="ride_type">Type de ride</label>
+          <select class="form-select" id="history-filter-ridetype">
+            <option value="" data-i18n="all">Tous</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" data-i18n="show_in_feed">Afficher dans le fil</label>
+          <div class="checkbox-inline-row">
+            <label class="checkbox-inline"><input type="checkbox" id="history-filter-show-rides" checked> <span data-i18n="rides">Rides</span></label>
+            <label class="checkbox-inline"><input type="checkbox" id="history-filter-show-charges" checked> <span data-i18n="charges">Charges</span></label>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary flex-1" id="history-filter-reset" data-i18n="reset">Réinitialiser</button>
+          <button class="btn btn-primary flex-1" id="history-filter-apply" data-i18n="apply">Appliquer</button>
+        </div>
+      </div>
 
-Calc.sortInterventions = function (interventions, sortBy, order) {
-  const sorted = [...interventions];
-  sorted.sort((a, b) => {
-    let valA, valB;
-    if (sortBy === 'date') {
-      valA = new Date(a.timestamp).getTime();
-      valB = new Date(b.timestamp).getTime();
-    } else if (sortBy === 'budget') {
-      valA = a.totalBudget || 0;
-      valB = b.totalBudget || 0;
-    } else if (sortBy === 'partsCount') {
-      valA = (a.parts || []).length;
-      valB = (b.parts || []).length;
-    } else {
-      return 0;
-    }
-    if (valA < valB) return order === 'asc' ? -1 : 1;
-    if (valA > valB) return order === 'asc' ? 1 : -1;
-    return 0;
-  });
-  return sorted;
-};
+      <div id="history-list"></div>
+    </div>
 
-Calc.searchInterventions = function (interventions, query) {
-  if (!query || query.trim() === '') return interventions;
-  const q = query.toLowerCase().trim();
-  return interventions.filter(i => {
-    const typeMatch = (i.interventionTypes || []).some(t => t.toLowerCase().includes(q));
-    const partsMatch = (i.parts || []).some(p => (p.partName || '').toLowerCase().includes(q) || (p.comment || '').toLowerCase().includes(q));
-    const budgetMatch = String(i.totalBudget || '').includes(q);
-    const commentMatch = (i.generalComment || '').toLowerCase().includes(q);
-    return typeMatch || partsMatch || budgetMatch || commentMatch;
-  });
-};
+    <!-- Onglet Entretien -->
+    <div class="tab-panel" id="history-tab-maintenance">
+      <div class="search-bar">
+        <svg viewBox="0 0 24 24"><path d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+        <input type="text" id="maintenance-search" data-i18n-placeholder="maintenance_search_placeholder" placeholder="Rechercher (pièce, budget, mot-clé...)">
+      </div>
 
-// --- Fil d'activités unifié (rides + charges) ---
-// Normalise rides et charges en items comparables. Chaque item porte une distance
-// et une consommation pour que les filtres et tris s'appliquent aux deux.
-// Charge : distance = km depuis la dernière charge, consommation = % injecté.
-Calc.buildActivities = function (trips, cycles) {
-  const rides = (trips || []).map(t => ({
-    kind: 'ride',
-    timestamp: t.timestamp,
-    distance: t.distanceKm || 0,
-    consumption: (t.batteryStart || 0) - (t.batteryEnd || 0),
-    rideType: t.rideType || '',
-    raw: t
-  }));
-  const charges = (cycles || []).map(c => ({
-    kind: 'charge',
-    timestamp: c.timestamp,
-    distance: c.kmSinceLastCharge || 0,
-    consumption: c.injected || 0,
-    rideType: null,
-    raw: c
-  }));
-  return rides.concat(charges);
-};
+      <div class="toolbar-row">
+        <button class="btn btn-secondary btn-sm" id="maintenance-sort-btn" data-i18n="sort">Trier</button>
+        <button class="btn btn-secondary btn-sm" id="maintenance-filter-btn" data-i18n="filter">Filtrer</button>
+      </div>
 
-Calc.filterActivities = function (items, filters) {
-  let result = [...items];
-  filters = filters || {};
-  const showRides = filters.showRides !== false;
-  const showCharges = filters.showCharges !== false;
-  result = result.filter(it => (it.kind === 'ride' ? showRides : showCharges));
+      <div class="filter-panel" id="maintenance-sort-panel">
+        <div class="form-group">
+          <label class="form-label" data-i18n="sort_by">Trier par</label>
+          <select class="form-select" id="maintenance-sort-by">
+            <option value="date" data-i18n="date">Date</option>
+            <option value="budget" data-i18n="budget">Budget</option>
+            <option value="partsCount" data-i18n="parts_count">Nombre de parties</option>
+          </select>
+        </div>
+        <div class="segmented-control">
+          <button class="active" data-order="desc" data-i18n="descending">Décroissant</button>
+          <button data-order="asc" data-i18n="ascending">Croissant</button>
+        </div>
+      </div>
 
-  if (filters.dateStart) {
-    const s = new Date(filters.dateStart);
-    result = result.filter(it => new Date(it.timestamp) >= s);
-  }
-  if (filters.dateEnd) {
-    const e = new Date(filters.dateEnd);
-    e.setHours(23, 59, 59, 999);
-    result = result.filter(it => new Date(it.timestamp) <= e);
-  }
-  if (filters.distanceMin !== undefined && filters.distanceMin !== null && filters.distanceMin !== '') {
-    result = result.filter(it => it.distance >= parseFloat(filters.distanceMin));
-  }
-  if (filters.distanceMax !== undefined && filters.distanceMax !== null && filters.distanceMax !== '') {
-    result = result.filter(it => it.distance <= parseFloat(filters.distanceMax));
-  }
-  if (filters.consumptionMin !== undefined && filters.consumptionMin !== null && filters.consumptionMin !== '') {
-    result = result.filter(it => it.consumption >= parseFloat(filters.consumptionMin));
-  }
-  if (filters.consumptionMax !== undefined && filters.consumptionMax !== null && filters.consumptionMax !== '') {
-    result = result.filter(it => it.consumption <= parseFloat(filters.consumptionMax));
-  }
-  // Le type de ride ne concerne que les rides : il exclut donc les charges.
-  if (filters.rideType) {
-    result = result.filter(it => it.kind === 'ride' && it.rideType === filters.rideType);
-  }
-  return result;
-};
+      <div class="filter-panel" id="maintenance-filter-panel">
+        <div class="filter-row">
+          <div class="form-group mb-0">
+            <label class="form-label" data-i18n="start_date">Date début</label>
+            <input type="date" class="form-input" id="maintenance-filter-date-start">
+          </div>
+          <div class="form-group mb-0">
+            <label class="form-label" data-i18n="end_date">Date fin</label>
+            <input type="date" class="form-input" id="maintenance-filter-date-end">
+          </div>
+        </div>
+        <div class="filter-row">
+          <div class="form-group mb-0">
+            <label class="form-label" data-i18n="min_budget">Budget min (€)</label>
+            <input type="number" class="form-input mono" id="maintenance-filter-budget-min" step="0.01" min="0">
+          </div>
+          <div class="form-group mb-0">
+            <label class="form-label" data-i18n="max_budget">Budget max (€)</label>
+            <input type="number" class="form-input mono" id="maintenance-filter-budget-max" step="0.01" min="0">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" data-i18n="intervention_type">Type d'intervention</label>
+          <select class="form-select" id="maintenance-filter-type">
+            <option value="" data-i18n="all">Tous</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary flex-1" id="maintenance-filter-reset" data-i18n="reset">Réinitialiser</button>
+          <button class="btn btn-primary flex-1" id="maintenance-filter-apply" data-i18n="apply">Appliquer</button>
+        </div>
+      </div>
 
-Calc.sortActivities = function (items, sortBy, order) {
-  const sorted = [...items];
-  const dir = order === 'asc' ? 1 : -1;
-  sorted.sort((a, b) => {
-    if (sortBy === 'rideType') {
-      // Les charges (sans type) se rangent toujours en fin, classées par date entre elles.
-      const aNull = a.rideType === null, bNull = b.rideType === null;
-      if (aNull && !bNull) return 1;
-      if (!aNull && bNull) return -1;
-      if (aNull && bNull) return new Date(b.timestamp) - new Date(a.timestamp);
-      if (a.rideType < b.rideType) return -dir;
-      if (a.rideType > b.rideType) return dir;
-      return 0;
-    }
-    let va, vb;
-    if (sortBy === 'distance') { va = a.distance; vb = b.distance; }
-    else if (sortBy === 'consumption') { va = a.consumption; vb = b.consumption; }
-    else { va = new Date(a.timestamp).getTime(); vb = new Date(b.timestamp).getTime(); }
-    if (va < vb) return -dir;
-    if (va > vb) return dir;
-    return 0;
-  });
-  return sorted;
-};
+      <div id="maintenance-list"></div>
+    </div>
+  </section>
 
-window.Calc = Calc;
+  <!-- ============ PARAMÈTRES ============ -->
+  <section class="view" id="view-settings">
+    <div class="page-header"><h1 data-i18n="settings">Paramètres</h1></div>
+
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="device" data-tabgroup="settings" data-panel="settings-tab-device" data-i18n="tab_device">Appareil</button>
+      <button class="tab-btn" data-tab="user" data-tabgroup="settings" data-panel="settings-tab-user" data-i18n="tab_user">Utilisateur</button>
+    </div>
+
+    <!-- Onglet Appareil : config technique propre à l'appareil actif (sélectionné dans le header) -->
+    <div class="tab-panel active" id="settings-tab-device">
+      <div class="settings-section">
+        <div class="panel-title" data-i18n="wheels">Roues</div>
+        <div class="panel" id="settings-wheels-list"></div>
+        <button class="btn btn-secondary btn-block" id="settings-add-wheel" data-i18n="add_wheel">+ Ajouter une roue</button>
+      </div>
+
+      <div class="settings-section">
+        <div class="panel-title" data-i18n="parts">Pièces</div>
+        <div class="panel" id="settings-parts-list"></div>
+        <button class="btn btn-secondary btn-block" id="settings-add-part" data-i18n="add_part">+ Ajouter une pièce</button>
+      </div>
+    </div>
+
+    <!-- Onglet Utilisateur : tout ce qui est global (profil, appareils, types, langue, données) -->
+    <div class="tab-panel" id="settings-tab-user">
+      <div class="settings-section">
+        <div class="panel-title" data-i18n="rider_profile">Profil</div>
+        <div class="panel">
+          <div class="form-group">
+            <label class="form-label" data-i18n="rider_name">Nom du rider</label>
+            <input type="text" class="form-input" id="profile-rider-name" placeholder="ex: Thomas">
+          </div>
+          <div class="form-group">
+            <label class="form-label" data-i18n="export_reminder_days">Rappel d'export (jours, 0 = désactivé)</label>
+            <input type="number" class="form-input mono" id="profile-export-reminder-days" min="0" step="1" value="0">
+          </div>
+          <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:14px" id="profile-last-export">Dernier export : jamais</div>
+          <button class="btn btn-primary btn-block" id="profile-save-btn" data-i18n="save">Enregistrer</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="panel-title" data-i18n="devices">Appareils</div>
+        <div class="panel" id="settings-devices-list"></div>
+        <button class="btn btn-secondary btn-block" id="settings-add-device" data-i18n="add_device">+ Ajouter un appareil</button>
+      </div>
+
+      <div class="settings-section">
+        <div class="panel-title" data-i18n="language">Langue</div>
+        <div class="panel">
+          <div class="segmented-control" id="settings-language-selector">
+            <button data-lang="fr" data-i18n="french">Français</button>
+            <button data-lang="en" data-i18n="english">English</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="panel-title" data-i18n="ride_types">Types de ride</div>
+        <div class="panel" id="settings-ridetypes-list"></div>
+        <button class="btn btn-secondary btn-block" id="settings-add-ridetype" data-i18n="add_ride_type">+ Ajouter un type de ride</button>
+      </div>
+
+      <div class="settings-section">
+        <div class="panel-title" data-i18n="wheel_types">Usages de roue</div>
+        <div class="panel" id="settings-wheeltypes-list"></div>
+        <button class="btn btn-secondary btn-block" id="settings-add-wheeltype" data-i18n="add_wheel_type">+ Ajouter un usage de roue</button>
+      </div>
+
+      <div class="settings-section">
+        <div class="panel-title" data-i18n="intervention_types">Types d'intervention</div>
+        <div class="panel" id="settings-interventiontypes-list"></div>
+        <button class="btn btn-secondary btn-block" id="settings-add-interventiontype" data-i18n="add_intervention_type">+ Ajouter un type d'intervention</button>
+      </div>
+
+      <div class="settings-section">
+        <div class="panel-title" data-i18n="data">Données</div>
+        <div class="panel">
+          <div style="font-size:12.5px;color:var(--text-tertiary);margin-bottom:10px" data-i18n="export_hint">Export régulier recommandé : seule vraie sauvegarde en cas de désinstallation.</div>
+          <button class="btn btn-secondary btn-block mt-8" id="settings-export-csv" data-i18n="export_trips">Exporter trajets en CSV</button>
+          <button class="btn btn-secondary btn-block mt-8" id="settings-export-csv-maintenance" data-i18n="export_maintenance">Exporter interventions en CSV</button>
+          <div style="height:1px;background:var(--border-subtle);margin:14px 0"></div>
+          <button class="btn btn-secondary btn-block" id="settings-import-csv" data-i18n="import_trips">Importer trajets depuis CSV</button>
+          <input type="file" id="settings-import-csv-input" accept=".csv,text/csv,text/comma-separated-values,application/csv,application/vnd.ms-excel,text/plain" class="hidden">
+          <button class="btn btn-secondary btn-block mt-8" id="settings-import-csv-maintenance" data-i18n="import_maintenance">Importer interventions depuis CSV</button>
+          <input type="file" id="settings-import-csv-maintenance-input" accept=".csv,text/csv,text/comma-separated-values,application/csv,application/vnd.ms-excel,text/plain" class="hidden">
+        </div>
+      </div>
+    </div>
+
+    <div class="app-version-footer" id="app-version-footer"></div>
+  </section>
+
+</div>
+
+<!-- Bottom nav avec bouton + central surélevé -->
+<nav class="bottom-nav">
+  <button class="nav-item active" data-view="dashboard">
+    <svg viewBox="0 0 24 24"><path d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h12a1 1 0 001-1V10" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span data-i18n="nav_dashboard">Dashboard</span>
+  </button>
+  <button class="nav-item" data-view="stats">
+    <svg viewBox="0 0 24 24"><path d="M3 3v18h18M7 16l4-5 3 3 5-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span data-i18n="nav_stats">Stats</span>
+  </button>
+
+  <div class="nav-fab-wrapper">
+    <button class="nav-fab" id="fab-main-btn" aria-label="Nouvelle action">
+      <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+    </button>
+    <div class="fab-menu" id="fab-menu">
+      <button class="fab-menu-item" id="fab-option-start" data-i18n="start_ride">Démarrer un ride</button>
+      <button class="fab-menu-item" id="fab-option-full" data-i18n="log_full_ride">Enregistrer un ride complet</button>
+      <button class="fab-menu-item is-cancel" id="fab-option-cancel" data-i18n="cancel_ride_in_progress" style="display:none">Annuler le ride en cours</button>
+      <div class="fab-menu-divider"></div>
+      <button class="fab-menu-item" id="fab-option-maintenance" data-i18n="new_maintenance">+ Nouvel entretien</button>
+    </div>
+  </div>
+
+  <button class="nav-item" data-view="history">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span data-i18n="nav_history">Historique</span>
+  </button>
+  <button class="nav-item" data-view="settings">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33h0a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51h0a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82h0a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span data-i18n="nav_settings">Réglages</span>
+  </button>
+</nav>
+
+<!-- Modal overlay générique (saisie trajet, intervention, etc.) -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal-sheet" id="modal-sheet"></div>
+</div>
+
+<!-- Popup de confirmation custom (remplace le confirm() natif du navigateur) -->
+<div class="confirm-overlay" id="confirm-overlay">
+  <div class="confirm-dialog" id="confirm-dialog"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/db.js"></script>
+<script src="js/devices.js"></script>
+<script src="js/calc.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/version.js"></script>
+<script src="js/trips.js"></script>
+<script src="js/maintenance.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/csv-io.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
