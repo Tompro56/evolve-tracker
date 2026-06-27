@@ -233,7 +233,7 @@ Calc.searchInterventions = function (interventions, query) {
   const q = query.toLowerCase().trim();
   return interventions.filter(i => {
     const typeMatch = (i.interventionTypes || []).some(t => t.toLowerCase().includes(q));
-    const partsMatch = (i.parts || []).some(p => p.name.toLowerCase().includes(q) || (p.comment || '').toLowerCase().includes(q));
+    const partsMatch = (i.parts || []).some(p => (p.partName || '').toLowerCase().includes(q) || (p.comment || '').toLowerCase().includes(q));
     const budgetMatch = String(i.totalBudget || '').includes(q);
     const commentMatch = (i.generalComment || '').toLowerCase().includes(q);
     return typeMatch || partsMatch || budgetMatch || commentMatch;

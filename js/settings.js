@@ -249,6 +249,27 @@ async function openSimpleItemForm(storeName, itemId, refreshCallback, deviceScop
     if (itemId) {
       data.id = itemId;
       if (deviceScoped) data.deviceId = item && item.deviceId !== undefined ? item.deviceId : await Devices.getCurrentId();
+
+      // Cascade : renommer un type de roue doit propager aux roues qui le référencent par chaîne.
+      // WHEELS.usage stocke le libellé, pas un id. On met à jour toutes les roues concernées.
+      // La suppression d'un type reste non destructive (la chaîne sur la roue survit au type supprimé).
+      if (storeName === EvolveDB.STORES.WHEEL_TYPES && item && item.name !== name) {
+        const oldName = item.name;
+        const wheels = await EvolveDB.dbGetAll(EvolveDB.STORES.WHEELS);
+        const affected = wheels.filter(w => w.usage === oldName);
+        if (affected.length > 0) {
+          const ok = await confirmDialog(
+            `Ce type est utilisé par ${affected.length} roue${affected.length > 1 ? 's' : ''}. Le renommer mettra à jour ${affected.length > 1 ? 'leur configuration' : 'sa configuration'} en base.`,
+            { title: 'Renommer le type', confirmLabel: 'Renommer', cancelLabel: 'Annuler' }
+          );
+          if (!ok) return;
+          for (const w of affected) {
+            w.usage = name;
+            await EvolveDB.dbPut(EvolveDB.STORES.WHEELS, w);
+          }
+        }
+      }
+
       await EvolveDB.dbPut(storeName, data);
     } else {
       if (deviceScoped) data.deviceId = await Devices.getCurrentId();
