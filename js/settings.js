@@ -379,15 +379,25 @@ Settings.openDeviceForm = async function (deviceId = null) {
       </div>
       <div style="font-size:12px;color:var(--text-tertiary);margin-top:6px">Ajouté au kilométrage suivi par l'app pour avoir un total réel si l'appareil n'est pas neuf.</div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Nombre de cellules batterie (optionnel)</label>
+    <div class="checkbox-row" style="margin-bottom:6px">
+      <input type="checkbox" id="device-diagnosable" ${device && (device.batteryDiagnosable || device.cellCount) ? 'checked' : ''}>
+      <label for="device-diagnosable">Batterie diagnosticable (cellules)</label>
+    </div>
+    <div class="form-group${device && (device.batteryDiagnosable || device.cellCount) ? '' : ' hidden'}" id="device-cellcount-group">
+      <label class="form-label">Nombre de cellules</label>
       <input type="number" class="form-input mono" id="device-cellcount" min="1" step="1" value="${device && device.cellCount ? device.cellCount : ''}" placeholder="ex: 12">
-      <div style="font-size:12px;color:var(--text-tertiary);margin-top:6px">Utilisé pour le diagnostic d'équilibre des cellules lors d'une révision constructeur.</div>
+      <div style="font-size:12px;color:var(--text-tertiary);margin-top:6px">Fait apparaître "Diagnostic batterie" comme type d'intervention, avec un champ par cellule à l'enregistrement.</div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-primary flex-1" id="device-save-btn">Enregistrer</button>
     </div>
   `;
+
+  const diagnosableCheckbox = document.getElementById('device-diagnosable');
+  const cellCountGroup = document.getElementById('device-cellcount-group');
+  diagnosableCheckbox.onchange = () => {
+    cellCountGroup.classList.toggle('hidden', !diagnosableCheckbox.checked);
+  };
 
   document.getElementById('device-form-close').onclick = closeModal;
   document.getElementById('device-save-btn').onclick = async () => {
@@ -402,14 +412,20 @@ Settings.openDeviceForm = async function (deviceId = null) {
     const acquisitionYear = isNaN(yearVal) ? null : yearVal;
     const kmVal = parseFloat(document.getElementById('device-initialkm').value);
     const initialKm = isNaN(kmVal) ? 0 : kmVal;
+    const batteryDiagnosable = diagnosableCheckbox.checked;
     const cellVal = parseInt(document.getElementById('device-cellcount').value);
-    const cellCount = isNaN(cellVal) ? null : cellVal;
+    const cellCount = (batteryDiagnosable && !isNaN(cellVal)) ? cellVal : null;
+
+    if (batteryDiagnosable && (!cellCount || cellCount < 1)) {
+      showToast('Indique un nombre de cellules valide.', 'error');
+      return;
+    }
 
     if (deviceId) {
-      await Devices.update({ id: deviceId, uuid: device.uuid, name, brand, model, acquisitionYear, initialKm, cellCount, createdAt: device.createdAt });
+      await Devices.update({ id: deviceId, uuid: device.uuid, name, brand, model, acquisitionYear, initialKm, batteryDiagnosable, cellCount, createdAt: device.createdAt });
       showToast('Appareil modifié', 'success');
     } else {
-      await Devices.create({ name, brand, model, acquisitionYear, initialKm, cellCount });
+      await Devices.create({ name, brand, model, acquisitionYear, initialKm, batteryDiagnosable, cellCount });
       showToast('Appareil ajouté', 'success');
     }
     closeModal();

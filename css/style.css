@@ -975,6 +975,23 @@ body {
   font-size: 12.5px;
 }
 
+.cell-voltage-field {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.cell-voltage-field input {
+  flex: 1;
+  min-width: 0;
+}
+
+.cell-voltage-unit {
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
 .cell-voltage-readout {
   display: flex;
   flex-direction: column;
@@ -1461,21 +1478,20 @@ body {
 
 /* Empêche la sélection de texte (et le popup de recherche Google associé) sur les
    tuiles et valeurs numériques, qui sont tapées et non lues/copiées mot à mot. */
-.stat-value,
-.stat-label,
-.trip-km,
-.item-card-budget,
-.battery-gauge-value,
-.autonomy-value,
-.autonomy-label,
-.charge-km-line,
-.detail-value,
-.detail-label,
-.cell-voltage-readout,
-.part-filled-dot {
+/* Empêche la sélection de texte (et le popup de recherche Google associé) partout
+   dans l'app par défaut, sauf dans les champs de saisie où l'édition normale reste possible. */
+body {
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+}
+
+input,
+textarea,
+select {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
 }
 
 /* --- Volets repliables des paramètres (lot C) --- */

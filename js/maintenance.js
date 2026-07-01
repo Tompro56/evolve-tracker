@@ -4,6 +4,10 @@
 
 const Maintenance = {};
 
+// Type d'intervention "en dur", non administrable dans Réglages > Types d'intervention.
+// N'apparaît que si l'appareil actif a le diagnostic batterie activé (cellCount renseigné).
+const BATTERY_DIAG_TYPE = 'Diagnostic batterie';
+
 let currentMaintenanceSort = { by: 'date', order: 'desc' };
 let currentMaintenanceSearch = '';
 let currentMaintenanceFilters = {};
@@ -36,6 +40,12 @@ Maintenance.openInterventionForm = async function (interventionId = null) {
             <label for="int-type-${it.id}">${it.name}</label>
           </div>
         `).join('')}
+        ${device && device.batteryDiagnosable ? `
+        <div class="checkbox-row">
+          <input type="checkbox" id="int-type-battery-diag" value="${BATTERY_DIAG_TYPE}" ${selectedTypes.includes(BATTERY_DIAG_TYPE) ? 'checked' : ''}>
+          <label for="int-type-battery-diag">${BATTERY_DIAG_TYPE}</label>
+        </div>
+        ` : ''}
       </div>
     </div>
 
@@ -151,12 +161,13 @@ Maintenance.openInterventionForm = async function (interventionId = null) {
     textarea.addEventListener('input', updateCounter);
   });
 
-  // Diagnostic cellules : visible seulement si "Révision constructeur" est cochée.
+  // Diagnostic cellules : visible seulement si "Diagnostic batterie" est coché.
+  // Ce type est en dur, non administrable, affiché seulement si device.batteryDiagnosable.
   // Le nombre de champs vient de device.cellCount (paramètres Appareil).
   const cellBlock = document.getElementById('int-cell-diagnostic-block');
   const cellInputsContainer = document.getElementById('int-cell-diagnostic-inputs');
   const existingVoltages = (intervention && intervention.cellVoltages) || [];
-  const revisionCheckbox = Array.from(sheet.querySelectorAll('#int-type-list input[type="checkbox"]')).find(cb => cb.value === 'Révision constructeur');
+  const batteryDiagCheckbox = document.getElementById('int-type-battery-diag');
 
   function renderCellInputs() {
     if (!device || !device.cellCount || device.cellCount < 1) {
@@ -166,19 +177,22 @@ Maintenance.openInterventionForm = async function (interventionId = null) {
     cellInputsContainer.innerHTML = `<div class="cell-voltage-grid">${Array.from({ length: device.cellCount }, (_, i) => `
       <div class="cell-voltage-input">
         <label>#${i + 1}</label>
-        <input type="number" class="form-input mono cell-voltage" step="0.001" min="0" placeholder="3.7" value="${existingVoltages[i] !== undefined ? existingVoltages[i] : ''}">
+        <div class="cell-voltage-field">
+          <input type="number" class="form-input mono cell-voltage" step="0.001" min="0" placeholder="3.7" value="${existingVoltages[i] !== undefined ? existingVoltages[i] : ''}">
+          <span class="cell-voltage-unit">V</span>
+        </div>
       </div>
     `).join('')}</div>`;
   }
 
   function toggleCellBlock() {
-    const on = revisionCheckbox && revisionCheckbox.checked;
+    const on = batteryDiagCheckbox && batteryDiagCheckbox.checked;
     cellBlock.classList.toggle('hidden', !on);
     if (on && cellInputsContainer.innerHTML.trim() === '') renderCellInputs();
   }
 
-  if (revisionCheckbox) {
-    revisionCheckbox.onchange = toggleCellBlock;
+  if (batteryDiagCheckbox) {
+    batteryDiagCheckbox.onchange = toggleCellBlock;
     toggleCellBlock();
   }
 
@@ -217,7 +231,8 @@ async function saveInterventionForm(interventionId) {
 
   const partsListExists = !!sheet.querySelector('#int-parts-list');
   const partCheckboxes = sheet.querySelectorAll('.part-checkbox:checked');
-  if (partsListExists && partCheckboxes.length === 0) {
+  const isBatteryDiagOnly = interventionTypes.includes(BATTERY_DIAG_TYPE);
+  if (partsListExists && partCheckboxes.length === 0 && !isBatteryDiagOnly) {
     showToast('Sélectionne au moins une partie concernée.', 'error');
     return;
   }
@@ -356,7 +371,7 @@ Maintenance.renderList = async function () {
   }
 
   listContainer.innerHTML = result.map(i => {
-    const badgeClass = i.interventionTypes.includes('Remplacement') ? 'badge-remplacement' : i.interventionTypes.includes('Révision constructeur') ? 'badge-revision' : 'badge-entretien';
+    const badgeClass = i.interventionTypes.includes('Remplacement') ? 'badge-remplacement' : (i.interventionTypes.includes('Révision constructeur') || i.interventionTypes.includes(BATTERY_DIAG_TYPE)) ? 'badge-revision' : 'badge-entretien';
     const partsNames = i.parts.map(p => p.partName).join(', ');
     const comment = (i.generalComment || '').trim();
     const budgetHtml = i.totalBudget > 0 ? `<span class="item-card-budget">${i.totalBudget.toFixed(2)} €</span>` : '';

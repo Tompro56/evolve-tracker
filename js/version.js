@@ -7,13 +7,21 @@
 // - MINEUR : nouvelle fonctionnalité ou amélioration notable
 // - CORRECTIF : correction de bug, ajustement visuel, retouche mineure
 
-const APP_VERSION = '3.6.0';
+const APP_VERSION = '3.6.1';
 
 window.APP_VERSION = APP_VERSION;
 
 // Synthèse des améliorations par version (du plus récent au plus ancien).
 // Affichée via le lien "détails" sous la version, dans les paramètres.
 window.APP_CHANGELOG = [
+  {
+    version: '3.6.1',
+    changes: [
+      "Sélection de texte désactivée partout dans l'app (fini le volet de recherche Google au tap)",
+      "Diagnostic batterie repensé : case dédiée dans les paramètres appareil, type d'intervention en dur « Diagnostic batterie », voltage par cellule en V",
+      "Une intervention de diagnostic batterie seule n'exige plus de sélectionner une pièce"
+    ]
+  },
   {
     version: '3.6.0',
     changes: [
