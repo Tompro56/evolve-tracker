@@ -465,16 +465,45 @@ body {
   max-width: 55%;
 }
 
-.autonomy-value {
+.autonomy-triple {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.autonomy-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 4px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+}
+
+.autonomy-cell-main {
+  border-color: var(--accent-green);
+}
+
+.autonomy-cell-label {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.autonomy-cell-value {
   font-family: var(--font-mono);
-  font-size: 26px;
+  font-size: 17px;
   font-weight: 600;
   color: var(--accent-green);
 }
 
-.autonomy-value .unit {
-  font-size: 14px;
-  color: var(--text-tertiary);
+.autonomy-cell:not(.autonomy-cell-main) .autonomy-cell-value {
+  font-size: 15px;
+  color: var(--text-secondary);
 }
 
 .battery-gauge-track {
@@ -920,6 +949,52 @@ body {
   width: 18px;
   height: 18px;
   accent-color: var(--accent-amber);
+}
+
+.cell-voltage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px;
+}
+
+.cell-voltage-input {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cell-voltage-input label {
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+.cell-voltage-input input {
+  padding: 6px 4px;
+  text-align: center;
+  font-size: 12.5px;
+}
+
+.cell-voltage-readout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 6px 4px;
+}
+
+.cell-voltage-readout span {
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+
+.cell-voltage-readout strong {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--text-primary);
 }
 
 .trip-item .trip-km .unit { font-size: 11px; color: var(--text-tertiary); font-weight: 400; }
@@ -1383,6 +1458,25 @@ body {
 .flex-row { display: flex; align-items: center; gap: 10px; }
 .flex-1 { flex: 1; }
 .hidden { display: none !important; }
+
+/* Empêche la sélection de texte (et le popup de recherche Google associé) sur les
+   tuiles et valeurs numériques, qui sont tapées et non lues/copiées mot à mot. */
+.stat-value,
+.stat-label,
+.trip-km,
+.item-card-budget,
+.battery-gauge-value,
+.autonomy-value,
+.autonomy-label,
+.charge-km-line,
+.detail-value,
+.detail-label,
+.cell-voltage-readout,
+.part-filled-dot {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
 
 /* --- Volets repliables des paramètres (lot C) --- */
 #view-settings .settings-section > .panel-title {

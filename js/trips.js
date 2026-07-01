@@ -46,6 +46,8 @@ Trips.openStartRideForm = async function () {
   const wheels = (await EvolveDB.dbGetAll(EvolveDB.STORES.WHEELS)).filter(w => w.deviceId === deviceId);
   const rideTypes = await EvolveDB.dbGetAll(EvolveDB.STORES.RIDE_TYPES);
   const defaultWheel = wheels.find(w => w.isDefault) || wheels[0];
+  const lastFinished = await Trips.getLastTrip(deviceId);
+  const prefilledStartBattery = lastFinished ? lastFinished.batteryEnd : '';
 
   const sheet = document.getElementById('modal-sheet');
   sheet.innerHTML = `
@@ -57,7 +59,7 @@ Trips.openStartRideForm = async function () {
     <div class="form-group">
       <label class="form-label">Batterie au départ</label>
       <div class="input-with-unit">
-        <input type="number" class="form-input mono" id="start-battery" min="0" max="100" step="0.1" placeholder="ex: 85" autofocus>
+        <input type="number" class="form-input mono" id="start-battery" min="0" max="100" step="0.1" value="${prefilledStartBattery}" placeholder="ex: 85" autofocus>
         <span class="unit-suffix">%</span>
       </div>
     </div>
@@ -101,9 +103,18 @@ Trips.openStartRideForm = async function () {
     closeModal();
     showToast('Ride démarré. Termine-le au retour.', 'success');
     if (window.refreshFabLabel) await window.refreshFabLabel();
+    if (window.App && App.refreshCurrentView) await App.refreshCurrentView();
   };
 
   openModal();
+};
+
+// Dernier trajet terminé pour un appareil, le plus récent par date. Utilisé pour
+// pré-remplir la batterie de départ d'une nouvelle sortie.
+Trips.getLastTrip = async function (deviceId) {
+  const trips = (await EvolveDB.dbGetAll(EvolveDB.STORES.TRIPS)).filter(t => t.deviceId === deviceId);
+  if (trips.length === 0) return null;
+  return [...trips].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
 };
 
 // --- Formulaire de saisie / édition d'un trajet ---
@@ -121,7 +132,13 @@ Trips.openTripForm = async function (tripId = null, options = {}) {
   }
 
   const defaultWheel = wheels.find(w => w.isDefault) || wheels[0];
-  const prefilledBatteryStart = rideInProgress ? rideInProgress.batteryStart : (trip ? trip.batteryStart : '');
+  // Pré-remplissage : si c'est un ride en cours ou une édition, on garde la valeur existante.
+  // Sinon (nouvelle sortie complète), on reprend l'arrivée du dernier trajet terminé, modifiable.
+  let prefilledBatteryStart = rideInProgress ? rideInProgress.batteryStart : (trip ? trip.batteryStart : '');
+  if (!rideInProgress && !trip) {
+    const lastFinished = await Trips.getLastTrip(deviceId);
+    if (lastFinished) prefilledBatteryStart = lastFinished.batteryEnd;
+  }
   const prefilledRideType = rideInProgress ? rideInProgress.rideType : (trip ? trip.rideType : null);
   const prefilledWheelId = rideInProgress ? rideInProgress.wheelId : (trip ? trip.wheelId : (defaultWheel ? defaultWheel.id : null));
   const batteryStartLocked = !!rideInProgress;
@@ -334,8 +351,7 @@ Trips.renderDashboard = async function () {
   document.getElementById('dash-total-consumption').innerHTML = stats.avgConsumptionPerKm !== null ? `${stats.avgConsumptionPerKm}<span class="unit">%/km</span>` : `--<span class="unit">%/km</span>`;
 
   // Batterie actuelle estimée = batterie d'arrivée de la dernière sortie
-  const sorted = [...trips].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-  const lastTrip = sorted[0];
+  const lastTrip = await Trips.getLastTrip(deviceId);
   const gaugeFill = document.getElementById('dash-battery-fill');
   const gaugeValue = document.getElementById('dash-battery-value');
   const sublabel = document.getElementById('dash-battery-sublabel');
@@ -365,26 +381,23 @@ Trips.renderDashboard = async function () {
 
   const defaultWheel = wheels.find(w => w.isDefault);
   if (defaultWheel) {
-    currentWheelContainer.innerHTML = `<span class="detail-label">Roue par défaut</span><span class="detail-value">${defaultWheel.diameter}mm · ${defaultWheel.characteristic}</span>`;
+    currentWheelContainer.innerHTML = `<span class="detail-label">Roue par défaut</span><span class="detail-value">${defaultWheel.diameter}mm · ${defaultWheel.characteristic}${defaultWheel.gear ? ' · Gear ' + defaultWheel.gear : ''}</span>`;
   } else {
     currentWheelContainer.innerHTML = `<span class="detail-label">Roue par défaut</span><span class="detail-value">Aucune</span>`;
   }
 
-  // Autonomie estimée = batterie restante (dernière sortie) × km par % moyens.
-  // "Tout" = moyenne globale ; un type = moyenne sur les sorties de ce type.
+  // Autonomie estimée = batterie restante (dernière sortie) × km par % pour chaque tuile.
+  // "Tout" = tous les trajets ; un type = restreint aux trajets de ce type.
   const rideTypes = await EvolveDB.dbGetAll(EvolveDB.STORES.RIDE_TYPES);
   const autoSelect = document.getElementById('dash-autonomy-type');
   autoSelect.innerHTML = `<option value="">${I18n.t('autonomy_all')}</option>` + rideTypes.map(rt => `<option value="${rt.name}">${rt.name}</option>`).join('');
-  const computeAutonomy = (type) => {
-    if (!lastTrip) return null;
-    const subset = type ? trips.filter(t => t.rideType === type) : trips;
-    const s = Calc.computeStats(subset);
-    if (s.avgDistancePerPercent === null) return null;
-    return Math.round(lastTrip.batteryEnd * s.avgDistancePerPercent * 10) / 10;
-  };
   const updateAutonomy = () => {
-    const v = computeAutonomy(autoSelect.value || null);
-    document.getElementById('dash-autonomy-km').textContent = v !== null ? v : '--';
+    const type = autoSelect.value || null;
+    const subset = type ? trips.filter(t => t.rideType === type) : trips;
+    const tiles = lastTrip ? Calc.autonomyTiles(subset, lastTrip.batteryEnd) : { mini: null, moyenne: null, maxi: null };
+    document.getElementById('dash-autonomy-mini').textContent = tiles.mini !== null ? tiles.mini + ' km' : '--';
+    document.getElementById('dash-autonomy-moyenne').textContent = tiles.moyenne !== null ? tiles.moyenne + ' km' : '--';
+    document.getElementById('dash-autonomy-maxi').textContent = tiles.maxi !== null ? tiles.maxi + ' km' : '--';
   };
   autoSelect.onchange = updateAutonomy;
   updateAutonomy();

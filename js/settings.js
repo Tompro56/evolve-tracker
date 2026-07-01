@@ -89,6 +89,11 @@ Settings.openWheelForm = async function (wheelId = null) {
       <label class="form-label">Caractéristique</label>
       <input type="text" class="form-input" id="wheel-characteristic" value="${wheel ? wheel.characteristic : ''}" placeholder="ex: crampon, slick, route...">
     </div>
+    <div class="form-group">
+      <label class="form-label">Gear (nombre de dents, optionnel)</label>
+      <input type="number" class="form-input mono" id="wheel-gear" min="1" step="1" value="${wheel && wheel.gear ? wheel.gear : ''}" placeholder="ex: 36">
+      <div style="font-size:12px;color:var(--text-tertiary);margin-top:6px">Laisse vide si l'engin n'utilise ni courroie ni chaîne.</div>
+    </div>
     <div class="checkbox-row" style="margin-bottom:16px">
       <input type="checkbox" id="wheel-default" ${wheel && wheel.isDefault ? 'checked' : ''}>
       <label for="wheel-default">Définir comme roue par défaut</label>
@@ -122,6 +127,8 @@ Settings.openWheelForm = async function (wheelId = null) {
 
     const diameter = parseFloat(document.getElementById('wheel-diameter').value);
     const characteristic = document.getElementById('wheel-characteristic').value.trim();
+    const gearVal = parseInt(document.getElementById('wheel-gear').value);
+    const gear = isNaN(gearVal) ? null : gearVal;
     const isDefault = document.getElementById('wheel-default').checked;
 
     if (isNaN(diameter) || diameter <= 0) {
@@ -143,7 +150,7 @@ Settings.openWheelForm = async function (wheelId = null) {
       }
     }
 
-    const data = { usage, diameter, characteristic, isDefault };
+    const data = { usage, diameter, characteristic, gear, isDefault };
     if (wheelId) {
       data.id = wheelId;
       data.deviceId = wheel && wheel.deviceId !== undefined ? wheel.deviceId : deviceId;
@@ -372,6 +379,11 @@ Settings.openDeviceForm = async function (deviceId = null) {
       </div>
       <div style="font-size:12px;color:var(--text-tertiary);margin-top:6px">Ajouté au kilométrage suivi par l'app pour avoir un total réel si l'appareil n'est pas neuf.</div>
     </div>
+    <div class="form-group">
+      <label class="form-label">Nombre de cellules batterie (optionnel)</label>
+      <input type="number" class="form-input mono" id="device-cellcount" min="1" step="1" value="${device && device.cellCount ? device.cellCount : ''}" placeholder="ex: 12">
+      <div style="font-size:12px;color:var(--text-tertiary);margin-top:6px">Utilisé pour le diagnostic d'équilibre des cellules lors d'une révision constructeur.</div>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-primary flex-1" id="device-save-btn">Enregistrer</button>
     </div>
@@ -390,12 +402,14 @@ Settings.openDeviceForm = async function (deviceId = null) {
     const acquisitionYear = isNaN(yearVal) ? null : yearVal;
     const kmVal = parseFloat(document.getElementById('device-initialkm').value);
     const initialKm = isNaN(kmVal) ? 0 : kmVal;
+    const cellVal = parseInt(document.getElementById('device-cellcount').value);
+    const cellCount = isNaN(cellVal) ? null : cellVal;
 
     if (deviceId) {
-      await Devices.update({ id: deviceId, uuid: device.uuid, name, brand, model, acquisitionYear, initialKm, createdAt: device.createdAt });
+      await Devices.update({ id: deviceId, uuid: device.uuid, name, brand, model, acquisitionYear, initialKm, cellCount, createdAt: device.createdAt });
       showToast('Appareil modifié', 'success');
     } else {
-      await Devices.create({ name, brand, model, acquisitionYear, initialKm });
+      await Devices.create({ name, brand, model, acquisitionYear, initialKm, cellCount });
       showToast('Appareil ajouté', 'success');
     }
     closeModal();
@@ -437,3 +451,5 @@ function escapeHtmlSettings(str) {
   div.textContent = str == null ? '' : String(str);
   return div.innerHTML;
 }
+
+window.Settings = Settings;

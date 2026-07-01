@@ -370,4 +370,37 @@ Calc.sortActivities = function (items, sortBy, order) {
   return sorted;
 };
 
+// Autonomie potentielle en km : mini/moyenne/maxi à partir de la batterie restante.
+// Mini = moyenne des 25% de trajets les plus gourmands (pire cas). Maxi = moyenne
+// des 25% les plus économes (meilleur cas). Moyenne = conso moyenne générale, inchangée.
+Calc.autonomyTiles = function (trips, batteryEnd) {
+  if (batteryEnd === null || batteryEnd === undefined) return { mini: null, moyenne: null, maxi: null };
+
+  const stats = Calc.computeStats(trips);
+  const moyenne = stats.avgDistancePerPercent !== null ? Math.round(batteryEnd * stats.avgDistancePerPercent * 10) / 10 : null;
+
+  const withRate = trips
+    .filter(t => (t.distanceKm || 0) > 0)
+    .map(t => ({ rate: Math.max(0, (t.batteryStart || 0) - (t.batteryEnd || 0)) / t.distanceKm, t }))
+    .filter(x => x.rate > 0);
+
+  if (withRate.length === 0) return { mini: null, moyenne, maxi: null };
+
+  const sorted = [...withRate].sort((a, b) => a.rate - b.rate); // du plus économe au plus gourmand
+  const n = sorted.length;
+  const bucketSize = Math.max(1, Math.round(n * 0.25));
+
+  const economeGroup = sorted.slice(0, bucketSize);
+  const gourmandGroup = sorted.slice(n - bucketSize);
+
+  const avgRate = arr => arr.reduce((s, x) => s + x.rate, 0) / arr.length;
+  const toKm = rate => Math.round(batteryEnd * (1 / rate) * 10) / 10;
+
+  return {
+    mini: toKm(avgRate(gourmandGroup)),
+    moyenne,
+    maxi: toKm(avgRate(economeGroup))
+  };
+};
+
 window.Calc = Calc;

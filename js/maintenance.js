@@ -11,6 +11,7 @@ let currentMaintenanceFilters = {};
 // --- Formulaire nouvelle / édition intervention ---
 Maintenance.openInterventionForm = async function (interventionId = null) {
   const deviceId = await Devices.getCurrentId();
+  const device = await Devices.get(deviceId);
   const interventionTypes = await EvolveDB.dbGetAll(EvolveDB.STORES.INTERVENTION_TYPES);
   const parts = (await EvolveDB.dbGetAll(EvolveDB.STORES.PARTS)).filter(p => p.deviceId === deviceId);
   let intervention = null;
@@ -36,6 +37,11 @@ Maintenance.openInterventionForm = async function (interventionId = null) {
           </div>
         `).join('')}
       </div>
+    </div>
+
+    <div class="form-group hidden" id="int-cell-diagnostic-block">
+      <label class="form-label">Diagnostic cellules (voltage par cellule)</label>
+      <div id="int-cell-diagnostic-inputs"></div>
     </div>
 
     <div class="form-group">
@@ -145,6 +151,37 @@ Maintenance.openInterventionForm = async function (interventionId = null) {
     textarea.addEventListener('input', updateCounter);
   });
 
+  // Diagnostic cellules : visible seulement si "Révision constructeur" est cochée.
+  // Le nombre de champs vient de device.cellCount (paramètres Appareil).
+  const cellBlock = document.getElementById('int-cell-diagnostic-block');
+  const cellInputsContainer = document.getElementById('int-cell-diagnostic-inputs');
+  const existingVoltages = (intervention && intervention.cellVoltages) || [];
+  const revisionCheckbox = Array.from(sheet.querySelectorAll('#int-type-list input[type="checkbox"]')).find(cb => cb.value === 'Révision constructeur');
+
+  function renderCellInputs() {
+    if (!device || !device.cellCount || device.cellCount < 1) {
+      cellInputsContainer.innerHTML = `<div style="font-size:12.5px;color:var(--text-tertiary)">Renseigne le nombre de cellules de cet appareil dans Réglages &gt; Appareil pour activer la saisie.</div>`;
+      return;
+    }
+    cellInputsContainer.innerHTML = `<div class="cell-voltage-grid">${Array.from({ length: device.cellCount }, (_, i) => `
+      <div class="cell-voltage-input">
+        <label>#${i + 1}</label>
+        <input type="number" class="form-input mono cell-voltage" step="0.001" min="0" placeholder="3.7" value="${existingVoltages[i] !== undefined ? existingVoltages[i] : ''}">
+      </div>
+    `).join('')}</div>`;
+  }
+
+  function toggleCellBlock() {
+    const on = revisionCheckbox && revisionCheckbox.checked;
+    cellBlock.classList.toggle('hidden', !on);
+    if (on && cellInputsContainer.innerHTML.trim() === '') renderCellInputs();
+  }
+
+  if (revisionCheckbox) {
+    revisionCheckbox.onchange = toggleCellBlock;
+    toggleCellBlock();
+  }
+
   document.getElementById('int-form-close').onclick = closeModal;
   document.getElementById('int-save-btn').onclick = () => saveInterventionForm(interventionId);
   if (intervention) {
@@ -203,6 +240,16 @@ async function saveInterventionForm(interventionId) {
 
   const data = { interventionTypes, parts, generalComment, totalBudget, timestamp };
 
+  // Diagnostic cellules : on ne sauve un tableau que si le bloc est visible et au moins une valeur saisie.
+  const cellBlock = document.getElementById('int-cell-diagnostic-block');
+  if (cellBlock && !cellBlock.classList.contains('hidden')) {
+    const cellInputs = Array.from(sheet.querySelectorAll('.cell-voltage'));
+    const voltages = cellInputs.map(inp => inp.value !== '' ? parseFloat(inp.value) : null);
+    if (voltages.some(v => v !== null)) {
+      data.cellVoltages = voltages;
+    }
+  }
+
   if (interventionId) {
     data.id = interventionId;
     const existing = await EvolveDB.dbGet(EvolveDB.STORES.INTERVENTIONS, interventionId);
@@ -234,6 +281,23 @@ Maintenance.openInterventionDetail = async function (interventionId) {
     <div class="detail-row"><span class="detail-label">Date</span><span class="detail-value">${Calc.formatDateTime(intervention.timestamp)}</span></div>
     <div class="detail-row"><span class="detail-label">Type</span><span class="detail-value">${intervention.interventionTypes.join(', ')}</span></div>
     <div class="detail-row"><span class="detail-label">Budget total</span><span class="detail-value">${intervention.totalBudget.toFixed(2)} €</span></div>
+
+    ${intervention.cellVoltages && intervention.cellVoltages.length > 0 ? (() => {
+      const values = intervention.cellVoltages.filter(v => v !== null && v !== undefined);
+      const min = values.length ? Math.min(...values) : null;
+      const max = values.length ? Math.max(...values) : null;
+      const delta = (min !== null && max !== null) ? Math.round((max - min) * 1000) / 1000 : null;
+      return `
+      <div class="panel-title mt-16">Diagnostic cellules</div>
+      <div class="panel" style="padding:12px;margin-bottom:8px">
+        ${delta !== null ? `<div class="detail-row"><span class="detail-label">Écart max</span><span class="detail-value">${delta} V</span></div>` : ''}
+        <div class="cell-voltage-grid" style="margin-top:8px">
+          ${intervention.cellVoltages.map((v, i) => `
+            <div class="cell-voltage-readout"><span>#${i + 1}</span><strong>${v !== null && v !== undefined ? v + ' V' : '—'}</strong></div>
+          `).join('')}
+        </div>
+      </div>`;
+    })() : ''}
 
     <div class="panel-title mt-16">Parties concernées</div>
     ${intervention.parts.map(p => `

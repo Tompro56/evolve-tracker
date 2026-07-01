@@ -7,13 +7,25 @@
 // - MINEUR : nouvelle fonctionnalité ou amélioration notable
 // - CORRECTIF : correction de bug, ajustement visuel, retouche mineure
 
-const APP_VERSION = '3.5.0';
+const APP_VERSION = '3.6.0';
 
 window.APP_VERSION = APP_VERSION;
 
 // Synthèse des améliorations par version (du plus récent au plus ancien).
 // Affichée via le lien "détails" sous la version, dans les paramètres.
 window.APP_CHANGELOG = [
+  {
+    version: '3.6.0',
+    changes: [
+      "Tuile ride en cours visible immédiatement au Dashboard, sans changer de vue",
+      "Batterie de départ pré-remplie avec l'arrivée du dernier trajet, modifiable",
+      "Fini le texte sélectionné par accident sur les tuiles et valeurs numériques",
+      "Usages de roue déplacés dans l'onglet Appareil",
+      "Champ Gear (nombre de dents) sur les roues, affiché au Dashboard si renseigné",
+      "Autonomie potentielle en trois tuiles : mini, moyenne, maxi",
+      "Diagnostic cellules : nombre de cellules par appareil, voltage par cellule en révision constructeur"
+    ]
+  },
   {
     version: '3.5.0',
     changes: [

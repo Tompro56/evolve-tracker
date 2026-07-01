@@ -62,7 +62,20 @@
           <span class="autonomy-label" data-i18n="estimated_range">Autonomie estimée</span>
           <select class="autonomy-select" id="dash-autonomy-type"></select>
         </div>
-        <div class="autonomy-value"><span id="dash-autonomy-km">--</span><span class="unit"> km</span></div>
+        <div class="autonomy-triple">
+          <div class="autonomy-cell">
+            <span class="autonomy-cell-label" data-i18n="autonomy_mini">Mini</span>
+            <span class="autonomy-cell-value" id="dash-autonomy-mini">--</span>
+          </div>
+          <div class="autonomy-cell autonomy-cell-main">
+            <span class="autonomy-cell-label" data-i18n="autonomy_moyenne">Moyenne</span>
+            <span class="autonomy-cell-value" id="dash-autonomy-moyenne">--</span>
+          </div>
+          <div class="autonomy-cell">
+            <span class="autonomy-cell-label" data-i18n="autonomy_maxi">Maxi</span>
+            <span class="autonomy-cell-value" id="dash-autonomy-maxi">--</span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -374,6 +387,12 @@
       </div>
 
       <div class="settings-section">
+        <div class="panel-title" data-i18n="wheel_types">Usages de roue</div>
+        <div class="panel" id="settings-wheeltypes-list"></div>
+        <button class="btn btn-secondary btn-block" id="settings-add-wheeltype" data-i18n="add_wheel_type">+ Ajouter un usage de roue</button>
+      </div>
+
+      <div class="settings-section">
         <div class="panel-title" data-i18n="parts">Pièces</div>
         <div class="panel" id="settings-parts-list"></div>
         <button class="btn btn-secondary btn-block" id="settings-add-part" data-i18n="add_part">+ Ajouter une pièce</button>
@@ -418,12 +437,6 @@
         <div class="panel-title" data-i18n="ride_types">Types de ride</div>
         <div class="panel" id="settings-ridetypes-list"></div>
         <button class="btn btn-secondary btn-block" id="settings-add-ridetype" data-i18n="add_ride_type">+ Ajouter un type de ride</button>
-      </div>
-
-      <div class="settings-section">
-        <div class="panel-title" data-i18n="wheel_types">Usages de roue</div>
-        <div class="panel" id="settings-wheeltypes-list"></div>
-        <button class="btn btn-secondary btn-block" id="settings-add-wheeltype" data-i18n="add_wheel_type">+ Ajouter un usage de roue</button>
       </div>
 
       <div class="settings-section">
