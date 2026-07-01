@@ -40,7 +40,7 @@ Maintenance.openInterventionForm = async function (interventionId = null) {
             <label for="int-type-${it.id}">${it.name}</label>
           </div>
         `).join('')}
-        ${device && device.batteryDiagnosable ? `
+        ${device && (device.batteryDiagnosable || device.cellCount) ? `
         <div class="checkbox-row">
           <input type="checkbox" id="int-type-battery-diag" value="${BATTERY_DIAG_TYPE}" ${selectedTypes.includes(BATTERY_DIAG_TYPE) ? 'checked' : ''}>
           <label for="int-type-battery-diag">${BATTERY_DIAG_TYPE}</label>

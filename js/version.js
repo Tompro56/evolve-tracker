@@ -7,13 +7,21 @@
 // - MINEUR : nouvelle fonctionnalité ou amélioration notable
 // - CORRECTIF : correction de bug, ajustement visuel, retouche mineure
 
-const APP_VERSION = '3.6.1';
+const APP_VERSION = '3.7.0';
 
 window.APP_VERSION = APP_VERSION;
 
 // Synthèse des améliorations par version (du plus récent au plus ancien).
 // Affichée via le lien "détails" sous la version, dans les paramètres.
 window.APP_CHANGELOG = [
+  {
+    version: '3.7.0',
+    changes: [
+      "Correctif : le diagnostic batterie apparaît désormais même sans avoir rouvert les paramètres appareil depuis la 3.6.0",
+      "Prolonger un ride : nouvelle option du menu +, fusionne la sortie suivante dans le même trajet au lieu d'en créer un nouveau",
+      "Zoom et défilement tactile sur les graphiques kilométrage et charge (glisser pour naviguer, pincer pour zoomer)"
+    ]
+  },
   {
     version: '3.6.1',
     changes: [

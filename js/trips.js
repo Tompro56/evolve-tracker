@@ -117,6 +117,43 @@ Trips.getLastTrip = async function (deviceId) {
   return [...trips].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
 };
 
+// Dernier trajet terminé s'il date d'aujourd'hui (jour calendaire local), sinon null.
+// Détermine si l'option "Prolonger le dernier ride" doit apparaître dans le FAB.
+Trips.getLastTripToday = async function (deviceId) {
+  const last = await Trips.getLastTrip(deviceId);
+  if (!last) return null;
+  const now = new Date();
+  const t = new Date(last.timestamp);
+  const sameDay = now.getFullYear() === t.getFullYear() && now.getMonth() === t.getMonth() && now.getDate() === t.getDate();
+  return sameDay ? last : null;
+};
+
+// Démarre un "ride en cours" qui, à sa complétion, sera fusionné dans le dernier
+// trajet du jour plutôt que de créer un nouveau trajet. La batterie de départ reprend
+// l'arrivée du dernier segment, type de ride et roue sont hérités (modifiables à la complétion).
+Trips.startExtendRide = async function () {
+  const deviceId = await Devices.getCurrentId();
+  const lastTrip = await Trips.getLastTripToday(deviceId);
+  if (!lastTrip) return;
+
+  const ok = await confirmDialog(
+    `Prolonger le trajet parti à ${Calc.formatDateTime(lastTrip.timestamp)} ? Le départ reprend à ${lastTrip.batteryEnd}%, la distance viendra s'ajouter au même trajet.`,
+    { title: 'Prolonger le ride', confirmLabel: 'Prolonger' }
+  );
+  if (!ok) return;
+
+  await Trips.saveRideInProgress({
+    batteryStart: lastTrip.batteryEnd,
+    rideType: lastTrip.rideType,
+    wheelId: lastTrip.wheelId,
+    startTimestamp: new Date().toISOString(),
+    extendTripId: lastTrip.id
+  });
+  showToast('Ride prolongé. Termine-le au retour.', 'success');
+  if (window.refreshFabLabel) await window.refreshFabLabel();
+  if (window.App && App.refreshCurrentView) await App.refreshCurrentView();
+};
+
 // --- Formulaire de saisie / édition d'un trajet ---
 // options.completingRideInProgress : true si on complète un ride démarré précédemment
 Trips.openTripForm = async function (tripId = null, options = {}) {
@@ -146,7 +183,7 @@ Trips.openTripForm = async function (tripId = null, options = {}) {
   const sheet = document.getElementById('modal-sheet');
   sheet.innerHTML = `
     <div class="modal-header">
-      <h2>${rideInProgress ? 'Terminer le ride' : (trip ? 'Modifier la sortie' : 'Nouvelle sortie')}</h2>
+      <h2>${rideInProgress ? (rideInProgress.extendTripId ? 'Terminer le ride prolongé' : 'Terminer le ride') : (trip ? 'Modifier la sortie' : 'Nouvelle sortie')}</h2>
       <button class="modal-close" id="trip-form-close"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
     </div>
 
@@ -249,6 +286,35 @@ async function saveTripForm(tripId, options = {}) {
     rideInProgress = await Trips.getRideInProgress();
   }
 
+  // Fusion "prolonger un ride" : pas de nouveau trajet, on cumule dans le trajet d'origine.
+  // On relit le trajet d'origine à cet instant plutôt que de faire confiance à des valeurs
+  // mises de côté au démarrage, pour rester la source unique de vérité.
+  if (rideInProgress && rideInProgress.extendTripId) {
+    const originalTrip = await EvolveDB.dbGet(EvolveDB.STORES.TRIPS, rideInProgress.extendTripId);
+    if (!originalTrip) {
+      showToast('Le trajet à prolonger est introuvable, il a peut-être été supprimé.', 'error');
+      return;
+    }
+    const mergedTrip = {
+      id: originalTrip.id,
+      uuid: originalTrip.uuid,
+      deviceId: originalTrip.deviceId,
+      batteryStart: originalTrip.batteryStart,
+      batteryEnd: batteryEnd,
+      distanceKm: Math.round((originalTrip.distanceKm + distanceKm) * 100) / 100,
+      rideType: rideType,
+      wheelId: wheelId,
+      timestamp: originalTrip.timestamp
+    };
+    await EvolveDB.dbPut(EvolveDB.STORES.TRIPS, mergedTrip);
+    await Trips.clearRideInProgress();
+    if (window.refreshFabLabel) await window.refreshFabLabel();
+    showToast('Ride prolongé et fusionné', 'success');
+    closeModal();
+    App.refreshCurrentView();
+    return;
+  }
+
   if (tsInput) {
     timestamp = new Date(tsInput.value).toISOString();
   } else if (rideInProgress && rideInProgress.startTimestamp) {
@@ -324,12 +390,13 @@ Trips.renderDashboard = async function () {
   const rideInProgress = await Trips.getRideInProgress(deviceId);
   const ripBanner = document.getElementById('dash-ride-in-progress-banner');
   if (rideInProgress) {
+    const isExtend = !!rideInProgress.extendTripId;
     ripBanner.innerHTML = `
       <div class="panel" style="border-color:var(--accent-amber);background:var(--accent-amber-dim)">
         <div class="flex-row" style="justify-content:space-between">
           <div>
-            <div style="font-size:13px;font-weight:600;color:var(--accent-amber)">Ride en cours</div>
-            <div style="font-size:12.5px;color:var(--text-secondary);margin-top:2px">Départ à ${Calc.formatDateTime(rideInProgress.startTimestamp)} · ${rideInProgress.batteryStart}%</div>
+            <div style="font-size:13px;font-weight:600;color:var(--accent-amber)">${isExtend ? 'Ride prolongé' : 'Ride en cours'}</div>
+            <div style="font-size:12.5px;color:var(--text-secondary);margin-top:2px">${isExtend ? 'Reprise à' : 'Départ à'} ${Calc.formatDateTime(rideInProgress.startTimestamp)} · ${rideInProgress.batteryStart}%</div>
           </div>
           <div class="flex-row" style="gap:6px">
             <button class="btn btn-secondary btn-sm" id="dash-cancel-ride-btn">Annuler</button>

@@ -12,6 +12,91 @@ function svgEl(tag, attrs) {
   return el;
 }
 
+// --- Zoom / défilement tactile pour les graphiques temporels (courbe, cycles de charge) ---
+// Fenêtre glissante sur le jeu de données complet : swipe pour défiler, pincer pour zoomer
+// (ajuster le nombre de points visibles). L'état persiste par conteneur tant que la taille du
+// jeu de données ne change pas ; un changement de période (donc de taille) réinitialise la vue.
+const chartWindowState = new WeakMap();
+const MIN_VISIBLE_POINTS = 3;
+const DEFAULT_VISIBLE_POINTS = 10;
+
+function getChartWindow(container, totalLength) {
+  let state = chartWindowState.get(container);
+  if (!state || state.totalLength !== totalLength) {
+    const windowSize = Math.min(totalLength, DEFAULT_VISIBLE_POINTS);
+    state = { totalLength, windowSize, windowStart: Math.max(0, totalLength - windowSize) };
+    chartWindowState.set(container, state);
+  }
+  return state;
+}
+
+function clampChartWindow(state) {
+  state.windowSize = Math.max(MIN_VISIBLE_POINTS, Math.min(state.totalLength, Math.round(state.windowSize)));
+  state.windowStart = Math.max(0, Math.min(state.totalLength - state.windowSize, Math.round(state.windowStart)));
+}
+
+// Attaché une seule fois par élément conteneur (le flag survit à container.innerHTML = '',
+// qui ne vide que les enfants, pas les propriétés JS posées sur le conteneur lui-même).
+function attachChartGestures(container, state, redraw) {
+  if (container._chartGesturesAttached) return;
+  container._chartGesturesAttached = true;
+
+  let dragging = false;
+  let startX = 0;
+  let startWindowStart = 0;
+  let pinchStartDist = null;
+  let pinchStartSize = null;
+
+  const dist = (touches) => {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  container.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 1) {
+      dragging = true;
+      startX = e.touches[0].clientX;
+      startWindowStart = state.windowStart;
+    } else if (e.touches.length === 2) {
+      dragging = false;
+      pinchStartDist = dist(e.touches);
+      pinchStartSize = state.windowSize;
+    }
+  }, { passive: true });
+
+  container.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2 && pinchStartDist) {
+      const newDist = dist(e.touches);
+      const ratio = pinchStartDist / Math.max(1, newDist); // écarter les doigts = zoomer = moins de points visibles
+      state.windowSize = pinchStartSize * ratio;
+      clampChartWindow(state);
+      redraw();
+    } else if (dragging && e.touches.length === 1) {
+      const width = container.clientWidth || 320;
+      const pointsPerPixel = state.windowSize / Math.max(1, width);
+      const dx = e.touches[0].clientX - startX;
+      state.windowStart = startWindowStart - dx * pointsPerPixel;
+      clampChartWindow(state);
+      redraw();
+    }
+  }, { passive: true });
+
+  const endGesture = (e) => {
+    if (e.touches.length === 0) { dragging = false; pinchStartDist = null; }
+  };
+  container.addEventListener('touchend', endGesture, { passive: true });
+  container.addEventListener('touchcancel', endGesture, { passive: true });
+}
+
+function chartWindowIndicator(container, state, visibleCount) {
+  if (state.totalLength <= state.windowSize) return;
+  const indicator = document.createElement('div');
+  indicator.className = 'chart-window-indicator';
+  indicator.textContent = `${state.windowStart + 1}–${state.windowStart + visibleCount} / ${state.totalLength}`;
+  container.appendChild(indicator);
+}
+
 // --- Courbe de kilométrage dans le temps ---
 Charts.lineChart = function (container, data, opts = {}) {
   container.innerHTML = '';
@@ -24,8 +109,11 @@ Charts.lineChart = function (container, data, opts = {}) {
     return;
   }
 
+  const winState = getChartWindow(container, data.length);
+  const windowedData = data.slice(winState.windowStart, winState.windowStart + winState.windowSize);
+
   const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, width: '100%', height: '100%' });
-  const values = data.map(d => d.km);
+  const values = windowedData.map(d => d.km);
   const maxVal = Math.max(...values, 1) * 1.15;
   const plotW = W - padL - padR;
   const plotH = H - padT - padB;
@@ -45,9 +133,9 @@ Charts.lineChart = function (container, data, opts = {}) {
   }
 
   // Points et ligne
-  const stepX = data.length > 1 ? plotW / (data.length - 1) : 0;
-  const points = data.map((d, i) => {
-    const x = padL + (data.length > 1 ? stepX * i : plotW / 2);
+  const stepX = windowedData.length > 1 ? plotW / (windowedData.length - 1) : 0;
+  const points = windowedData.map((d, i) => {
+    const x = padL + (windowedData.length > 1 ? stepX * i : plotW / 2);
     const y = padT + plotH - (d.km / maxVal) * plotH;
     return { x, y, ...d };
   });
@@ -81,6 +169,8 @@ Charts.lineChart = function (container, data, opts = {}) {
   }
 
   container.appendChild(svg);
+  chartWindowIndicator(container, winState, windowedData.length);
+  attachChartGestures(container, winState, () => Charts.lineChart(container, data, opts));
 };
 
 // --- Disque de répartition (donut) ---
@@ -159,6 +249,9 @@ Charts.chargeBandChart = function (container, data, opts = {}) {
     return;
   }
 
+  const winState = getChartWindow(container, data.length);
+  const windowedData = data.slice(winState.windowStart, winState.windowStart + winState.windowSize);
+
   const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, width: '100%', height: '100%' });
   const plotW = W - padL - padR;
   const plotH = H - padT - padB;
@@ -175,10 +268,10 @@ Charts.chargeBandChart = function (container, data, opts = {}) {
     svg.appendChild(label);
   }
 
-  const barWidth = Math.min(28, (plotW / data.length) * 0.55);
-  const step = plotW / data.length;
+  const barWidth = Math.min(28, (plotW / windowedData.length) * 0.55);
+  const step = plotW / windowedData.length;
 
-  data.forEach((d, i) => {
+  windowedData.forEach((d, i) => {
     const x = padL + step * i + step / 2 - barWidth / 2;
     const yHigh = padT + plotH - (d.high / maxVal) * plotH;
     const yLow = padT + plotH - (d.low / maxVal) * plotH;
@@ -197,9 +290,9 @@ Charts.chargeBandChart = function (container, data, opts = {}) {
   });
 
   // Axe X labels
-  const showIdx = data.length === 1 ? [0] : [0, Math.floor(data.length / 2), data.length - 1];
+  const showIdx = windowedData.length === 1 ? [0] : [0, Math.floor(windowedData.length / 2), windowedData.length - 1];
   showIdx.forEach(i => {
-    const d = data[i];
+    const d = windowedData[i];
     const x = padL + step * i + step / 2;
     const dateObj = new Date(d.timestamp);
     const label = svgEl('text', { x, y: H - 8, 'text-anchor': 'middle', fill: '#5f675e', 'font-size': '10' });
@@ -208,6 +301,8 @@ Charts.chargeBandChart = function (container, data, opts = {}) {
   });
 
   container.appendChild(svg);
+  chartWindowIndicator(container, winState, windowedData.length);
+  attachChartGestures(container, winState, () => Charts.chargeBandChart(container, data, opts));
 
   if (opts.legendContainer) {
     opts.legendContainer.innerHTML = `

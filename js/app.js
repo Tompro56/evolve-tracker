@@ -247,6 +247,13 @@ function setupFabMenu() {
     await cancelRideInProgress();
   };
 
+  const optionExtend = document.getElementById('fab-option-extend');
+  optionExtend.onclick = async (e) => {
+    e.stopPropagation();
+    closeFabMenu();
+    await Trips.startExtendRide();
+  };
+
   const optionMaintenance = document.getElementById('fab-option-maintenance');
   optionMaintenance.onclick = (e) => {
     e.stopPropagation();
@@ -266,18 +273,25 @@ function closeFabMenu() {
 }
 
 // Met à jour le libellé du bouton "Démarrer un ride" -> "Terminer le ride en cours"
+// et la visibilité de "Prolonger le dernier ride" (seulement si aucun ride en cours
+// et qu'un trajet existe déjà aujourd'hui pour cet appareil).
 async function refreshFabLabel() {
   const inProgress = await Trips.getRideInProgress();
   const optionStart = document.getElementById('fab-option-start');
   const optionCancel = document.getElementById('fab-option-cancel');
+  const optionExtend = document.getElementById('fab-option-extend');
   if (inProgress) {
     optionStart.textContent = I18n.t('finish_ride');
     optionStart.classList.add('is-finish');
     optionCancel.style.display = 'block';
+    optionExtend.style.display = 'none';
   } else {
     optionStart.textContent = I18n.t('start_ride');
     optionStart.classList.remove('is-finish');
     optionCancel.style.display = 'none';
+    const deviceId = await Devices.getCurrentId();
+    const todayTrip = await Trips.getLastTripToday(deviceId);
+    optionExtend.style.display = todayTrip ? 'block' : 'none';
   }
 }
 window.refreshFabLabel = refreshFabLabel;
