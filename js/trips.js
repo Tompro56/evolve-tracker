@@ -488,7 +488,7 @@ Trips.renderStats = async function () {
   document.getElementById('stats-period-range').innerHTML = stats.avgDistancePerPercent !== null ? `${stats.avgDistancePerPercent}<span class="unit">km/%</span>` : `--<span class="unit">km/%</span>`;
 
   const series = Calc.kmTimeSeries(filtered);
-  Charts.lineChart(document.getElementById('chart-km'), series);
+  Charts.barChart(document.getElementById('chart-km'), series);
 
   const dist = Calc.rideTypeDistribution(filtered);
   Charts.donutChart(document.getElementById('chart-donut'), dist, { legendContainer: document.getElementById('chart-donut-legend') });

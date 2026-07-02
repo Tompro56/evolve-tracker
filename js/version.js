@@ -7,13 +7,21 @@
 // - MINEUR : nouvelle fonctionnalité ou amélioration notable
 // - CORRECTIF : correction de bug, ajustement visuel, retouche mineure
 
-const APP_VERSION = '3.7.1';
+const APP_VERSION = '3.7.2';
 
 window.APP_VERSION = APP_VERSION;
 
 // Synthèse des améliorations par version (du plus récent au plus ancien).
 // Affichée via le lien "détails" sous la version, dans les paramètres.
 window.APP_CHANGELOG = [
+  {
+    version: '3.7.2',
+    changes: [
+      "Correctif : le défilement au doigt sur les graphiques ne fonctionnait pas (le scroll vertical de la page prenait le dessus, remplacé par un système qui tranche la direction du geste avant d'agir)",
+      "Graphique kilométrage : histogramme (une barre par trajet) à la place de la courbe, plus lisible pour des sorties distinctes",
+      "Indicateur de zoom clarifié : « X à Y sur Z » à la place du format en fraction"
+    ]
+  },
   {
     version: '3.7.1',
     changes: [

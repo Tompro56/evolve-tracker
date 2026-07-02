@@ -43,6 +43,11 @@ function clampChartWindow(state) {
 // qui ne vide que les enfants, pas les propriétés JS posées sur le conteneur lui-même).
 // Les handlers passent par container._gestureState/_gestureRedraw, rafraîchis à chaque
 // rendu, pour ne jamais piloter un état périmé après un changement de période.
+// Pointer Events plutôt que Touch Events : la direction du geste est tranchée sur les
+// premiers pixels, et le scroll vertical de page n'est bloqué (preventDefault) qu'une fois
+// le geste confirmé horizontal. Avec de simples écouteurs tactiles passifs, un léger angle
+// vertical dans le geste (quasi systématique) faisait gagner le scroll natif de la page
+// avant que le JS ne reprenne la main, d'où un défilement qui semblait ne rien faire.
 function attachChartGestures(container, state, redraw) {
   container._gestureState = state;
   container._gestureRedraw = redraw;
@@ -50,36 +55,53 @@ function attachChartGestures(container, state, redraw) {
   container._chartGesturesAttached = true;
 
   let dragging = false;
+  let activePointerId = null;
   let startX = 0;
+  let startY = 0;
   let startWindowStart = 0;
+  let direction = null; // 'horizontal' | 'vertical' | null tant que pas tranché
 
-  container.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 1) {
-      dragging = true;
-      startX = e.touches[0].clientX;
-      startWindowStart = container._gestureState.windowStart;
-    } else {
-      dragging = false;
-    }
-  }, { passive: true });
+  container.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    dragging = true;
+    direction = null;
+    activePointerId = e.pointerId;
+    startX = e.clientX;
+    startY = e.clientY;
+    startWindowStart = container._gestureState.windowStart;
+    try { container.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+  });
 
-  container.addEventListener('touchmove', (e) => {
-    if (dragging && e.touches.length === 1) {
-      const st = container._gestureState;
-      const width = container.clientWidth || 320;
-      const pointsPerPixel = st.windowSize / Math.max(1, width);
-      const dx = e.touches[0].clientX - startX;
-      st.windowStart = startWindowStart - dx * pointsPerPixel;
-      clampChartWindow(st);
-      container._gestureRedraw();
+  container.addEventListener('pointermove', (e) => {
+    if (!dragging || e.pointerId !== activePointerId) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+
+    if (direction === null) {
+      if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return; // trop tôt pour trancher
+      direction = Math.abs(dx) > Math.abs(dy) ? 'horizontal' : 'vertical';
     }
-  }, { passive: true });
+    if (direction !== 'horizontal') return; // geste vertical : on laisse le scroll natif faire son travail
+
+    e.preventDefault(); // geste horizontal confirmé, on empêche tout scroll résiduel de page
+
+    const st = container._gestureState;
+    const width = container.clientWidth || 320;
+    const pointsPerPixel = st.windowSize / Math.max(1, width);
+    st.windowStart = startWindowStart - dx * pointsPerPixel;
+    clampChartWindow(st);
+    container._gestureRedraw();
+  }, { passive: false });
 
   const endGesture = (e) => {
-    if (e.touches.length === 0) dragging = false;
+    if (e.pointerId === activePointerId) {
+      dragging = false;
+      activePointerId = null;
+      direction = null;
+    }
   };
-  container.addEventListener('touchend', endGesture, { passive: true });
-  container.addEventListener('touchcancel', endGesture, { passive: true });
+  container.addEventListener('pointerup', endGesture);
+  container.addEventListener('pointercancel', endGesture);
 }
 
 // Barre de contrôle sous le graphique : défiler gauche/droite, zoom -, zoom +.
@@ -152,12 +174,13 @@ function chartWindowIndicator(container, state, visibleCount) {
   if (state.totalLength <= state.windowSize) return;
   const indicator = document.createElement('div');
   indicator.className = 'chart-window-indicator';
-  indicator.textContent = `${state.windowStart + 1}–${state.windowStart + visibleCount} / ${state.totalLength}`;
+  indicator.textContent = `${state.windowStart + 1} à ${state.windowStart + visibleCount} sur ${state.totalLength}`;
   container.appendChild(indicator);
 }
 
 // --- Courbe de kilométrage dans le temps ---
-Charts.lineChart = function (container, data, opts = {}) {
+// --- Histogramme de kilométrage dans le temps (une barre par trajet) ---
+Charts.barChart = function (container, data, opts = {}) {
   container.innerHTML = '';
   const W = container.clientWidth || 320;
   const H = container.clientHeight || 220;
@@ -192,46 +215,35 @@ Charts.lineChart = function (container, data, opts = {}) {
     svg.appendChild(label);
   }
 
-  // Points et ligne
-  const stepX = windowedData.length > 1 ? plotW / (windowedData.length - 1) : 0;
-  const points = windowedData.map((d, i) => {
-    const x = padL + (windowedData.length > 1 ? stepX * i : plotW / 2);
-    const y = padT + plotH - (d.km / maxVal) * plotH;
-    return { x, y, ...d };
-  });
+  // Barres, une par trajet
+  const step = plotW / windowedData.length;
+  const barWidth = Math.min(30, step * 0.6);
 
-  // Aire sous la courbe
-  if (points.length > 1) {
-    let areaPath = `M ${points[0].x} ${padT + plotH} `;
-    points.forEach(p => areaPath += `L ${p.x} ${p.y} `);
-    areaPath += `L ${points[points.length - 1].x} ${padT + plotH} Z`;
-    svg.appendChild(svgEl('path', { d: areaPath, fill: 'rgba(255, 157, 46, 0.12)', stroke: 'none' }));
-
-    let linePath = `M ${points[0].x} ${points[0].y} `;
-    for (let i = 1; i < points.length; i++) linePath += `L ${points[i].x} ${points[i].y} `;
-    svg.appendChild(svgEl('path', { d: linePath, fill: 'none', stroke: '#ff9d2e', 'stroke-width': 2.2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
-  }
-
-  points.forEach(p => {
-    svg.appendChild(svgEl('circle', { cx: p.x, cy: p.y, r: 3.2, fill: '#0d0f0e', stroke: '#ff9d2e', 'stroke-width': 1.8 }));
+  windowedData.forEach((d, i) => {
+    const x = padL + step * i + step / 2 - barWidth / 2;
+    const barHeight = (d.km / maxVal) * plotH;
+    const y = padT + plotH - barHeight;
+    svg.appendChild(svgEl('rect', {
+      x, y, width: barWidth, height: Math.max(2, barHeight),
+      fill: '#ff9d2e', opacity: 0.85, rx: 3
+    }));
   });
 
   // Axe X : labels début/milieu/fin
-  if (points.length > 0) {
-    const showIdx = points.length === 1 ? [0] : [0, Math.floor(points.length / 2), points.length - 1];
-    showIdx.forEach(i => {
-      const p = points[i];
-      const d = new Date(p.timestamp);
-      const label = svgEl('text', { x: p.x, y: H - 8, 'text-anchor': 'middle', fill: '#5f675e', 'font-size': '10' });
-      label.textContent = d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
-      svg.appendChild(label);
-    });
-  }
+  const showIdx = windowedData.length === 1 ? [0] : [0, Math.floor(windowedData.length / 2), windowedData.length - 1];
+  showIdx.forEach(i => {
+    const d = windowedData[i];
+    const x = padL + step * i + step / 2;
+    const dateObj = new Date(d.timestamp);
+    const label = svgEl('text', { x, y: H - 8, 'text-anchor': 'middle', fill: '#5f675e', 'font-size': '10' });
+    label.textContent = dateObj.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+    svg.appendChild(label);
+  });
 
   container.appendChild(svg);
   chartWindowIndicator(container, winState, windowedData.length);
-  attachChartGestures(container, winState, () => Charts.lineChart(container, data, opts));
-  ensureChartControls(container, winState, () => Charts.lineChart(container, data, opts));
+  attachChartGestures(container, winState, () => Charts.barChart(container, data, opts));
+  ensureChartControls(container, winState, () => Charts.barChart(container, data, opts));
 };
 
 // --- Disque de répartition (donut) ---
