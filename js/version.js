@@ -7,13 +7,20 @@
 // - MINEUR : nouvelle fonctionnalité ou amélioration notable
 // - CORRECTIF : correction de bug, ajustement visuel, retouche mineure
 
-const APP_VERSION = '3.7.0';
+const APP_VERSION = '3.7.1';
 
 window.APP_VERSION = APP_VERSION;
 
 // Synthèse des améliorations par version (du plus récent au plus ancien).
 // Affichée via le lien "détails" sous la version, dans les paramètres.
 window.APP_CHANGELOG = [
+  {
+    version: '3.7.1',
+    changes: [
+      "Graphiques : boutons de zoom et de défilement sous le graphique, en remplacement du pincement à deux doigts",
+      "Le défilement au doigt sur le graphique reste actif en complément des flèches"
+    ]
+  },
   {
     version: '3.7.0',
     changes: [

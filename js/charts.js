@@ -12,13 +12,17 @@ function svgEl(tag, attrs) {
   return el;
 }
 
-// --- Zoom / défilement tactile pour les graphiques temporels (courbe, cycles de charge) ---
-// Fenêtre glissante sur le jeu de données complet : swipe pour défiler, pincer pour zoomer
-// (ajuster le nombre de points visibles). L'état persiste par conteneur tant que la taille du
-// jeu de données ne change pas ; un changement de période (donc de taille) réinitialise la vue.
+// --- Zoom / défilement pour les graphiques temporels (courbe, cycles de charge) ---
+// Fenêtre glissante sur le jeu de données complet. Défilement au doigt (un seul doigt)
+// ou aux flèches ; zoom aux boutons loupe sous le graphique. Le pincement à deux doigts
+// a été abandonné : illisible sur un graphique de cette taille. L'état persiste par
+// conteneur tant que la taille du jeu de données ne change pas ; un changement de
+// période (donc de taille) réinitialise la vue.
 const chartWindowState = new WeakMap();
 const MIN_VISIBLE_POINTS = 3;
 const DEFAULT_VISIBLE_POINTS = 10;
+const ZOOM_STEP = 1.5;   // facteur par appui sur loupe
+const PAN_STEP = 0.5;    // fraction de fenêtre par appui sur flèche
 
 function getChartWindow(container, totalLength) {
   let state = chartWindowState.get(container);
@@ -37,56 +41,111 @@ function clampChartWindow(state) {
 
 // Attaché une seule fois par élément conteneur (le flag survit à container.innerHTML = '',
 // qui ne vide que les enfants, pas les propriétés JS posées sur le conteneur lui-même).
+// Les handlers passent par container._gestureState/_gestureRedraw, rafraîchis à chaque
+// rendu, pour ne jamais piloter un état périmé après un changement de période.
 function attachChartGestures(container, state, redraw) {
+  container._gestureState = state;
+  container._gestureRedraw = redraw;
   if (container._chartGesturesAttached) return;
   container._chartGesturesAttached = true;
 
   let dragging = false;
   let startX = 0;
   let startWindowStart = 0;
-  let pinchStartDist = null;
-  let pinchStartSize = null;
-
-  const dist = (touches) => {
-    const dx = touches[0].clientX - touches[1].clientX;
-    const dy = touches[0].clientY - touches[1].clientY;
-    return Math.sqrt(dx * dx + dy * dy);
-  };
 
   container.addEventListener('touchstart', (e) => {
     if (e.touches.length === 1) {
       dragging = true;
       startX = e.touches[0].clientX;
-      startWindowStart = state.windowStart;
-    } else if (e.touches.length === 2) {
+      startWindowStart = container._gestureState.windowStart;
+    } else {
       dragging = false;
-      pinchStartDist = dist(e.touches);
-      pinchStartSize = state.windowSize;
     }
   }, { passive: true });
 
   container.addEventListener('touchmove', (e) => {
-    if (e.touches.length === 2 && pinchStartDist) {
-      const newDist = dist(e.touches);
-      const ratio = pinchStartDist / Math.max(1, newDist); // écarter les doigts = zoomer = moins de points visibles
-      state.windowSize = pinchStartSize * ratio;
-      clampChartWindow(state);
-      redraw();
-    } else if (dragging && e.touches.length === 1) {
+    if (dragging && e.touches.length === 1) {
+      const st = container._gestureState;
       const width = container.clientWidth || 320;
-      const pointsPerPixel = state.windowSize / Math.max(1, width);
+      const pointsPerPixel = st.windowSize / Math.max(1, width);
       const dx = e.touches[0].clientX - startX;
-      state.windowStart = startWindowStart - dx * pointsPerPixel;
-      clampChartWindow(state);
-      redraw();
+      st.windowStart = startWindowStart - dx * pointsPerPixel;
+      clampChartWindow(st);
+      container._gestureRedraw();
     }
   }, { passive: true });
 
   const endGesture = (e) => {
-    if (e.touches.length === 0) { dragging = false; pinchStartDist = null; }
+    if (e.touches.length === 0) dragging = false;
   };
   container.addEventListener('touchend', endGesture, { passive: true });
   container.addEventListener('touchcancel', endGesture, { passive: true });
+}
+
+// Barre de contrôle sous le graphique : défiler gauche/droite, zoom -, zoom +.
+// Créée une fois par conteneur, insérée juste après lui, mise à jour à chaque redraw.
+function ensureChartControls(container, state, redraw) {
+  let bar = container._chartControlsBar;
+  if (!bar || !bar.isConnected) {
+    bar = document.createElement('div');
+    bar.className = 'chart-controls';
+    bar.innerHTML = `
+      <button type="button" class="chart-ctrl-btn" data-act="left" aria-label="Défiler vers la gauche">
+        <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button type="button" class="chart-ctrl-btn" data-act="zoomout" aria-label="Dézoomer">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" fill="none"/><path d="M16.5 16.5L21 21M8 11h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <button type="button" class="chart-ctrl-btn" data-act="zoomin" aria-label="Zoomer">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" fill="none"/><path d="M16.5 16.5L21 21M8 11h6M11 8v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <button type="button" class="chart-ctrl-btn" data-act="right" aria-label="Défiler vers la droite">
+        <svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    `;
+    container.insertAdjacentElement('afterend', bar);
+    container._chartControlsBar = bar;
+
+    bar.querySelectorAll('.chart-ctrl-btn').forEach(btn => {
+      btn.onclick = () => {
+        // Références rafraîchies à chaque redraw : après un changement de période,
+        // le state et le redraw d'origine sont périmés, on pilote toujours les courants.
+        const st = bar._state;
+        const rd = bar._redraw;
+        const act = btn.dataset.act;
+        if (act === 'left') st.windowStart -= Math.max(1, st.windowSize * PAN_STEP);
+        else if (act === 'right') st.windowStart += Math.max(1, st.windowSize * PAN_STEP);
+        else if (act === 'zoomin') {
+          // Zoomer = moins de points visibles, centré sur la fenêtre courante
+          const center = st.windowStart + st.windowSize / 2;
+          st.windowSize = st.windowSize / ZOOM_STEP;
+          st.windowStart = center - st.windowSize / 2;
+        } else if (act === 'zoomout') {
+          const center = st.windowStart + st.windowSize / 2;
+          st.windowSize = st.windowSize * ZOOM_STEP;
+          st.windowStart = center - st.windowSize / 2;
+        }
+        clampChartWindow(st);
+        rd();
+      };
+    });
+  }
+  // L'état partagé référencé par les handlers est remplacé quand le dataset change :
+  // on rafraîchit les références pour que les boutons pilotent toujours l'état courant.
+  bar._state = state;
+  bar._redraw = redraw;
+
+  // États désactivés selon les bornes
+  const atStart = state.windowStart <= 0;
+  const atEnd = state.windowStart + state.windowSize >= state.totalLength;
+  const minZoom = state.windowSize >= state.totalLength;
+  const maxZoom = state.windowSize <= MIN_VISIBLE_POINTS;
+  bar.querySelector('[data-act="left"]').disabled = atStart;
+  bar.querySelector('[data-act="right"]').disabled = atEnd;
+  bar.querySelector('[data-act="zoomout"]').disabled = minZoom;
+  bar.querySelector('[data-act="zoomin"]').disabled = maxZoom;
+  // Barre invisible si tout tient à l'écran sans zoom possible (peu de points)
+  bar.style.display = (state.totalLength <= MIN_VISIBLE_POINTS) ? 'none' : 'flex';
 }
 
 function chartWindowIndicator(container, state, visibleCount) {
@@ -106,6 +165,7 @@ Charts.lineChart = function (container, data, opts = {}) {
 
   if (!data || data.length === 0) {
     container.innerHTML = '<div class="empty-state"><p>Pas assez de données sur cette période.</p></div>';
+    if (container._chartControlsBar) container._chartControlsBar.style.display = 'none';
     return;
   }
 
@@ -171,6 +231,7 @@ Charts.lineChart = function (container, data, opts = {}) {
   container.appendChild(svg);
   chartWindowIndicator(container, winState, windowedData.length);
   attachChartGestures(container, winState, () => Charts.lineChart(container, data, opts));
+  ensureChartControls(container, winState, () => Charts.lineChart(container, data, opts));
 };
 
 // --- Disque de répartition (donut) ---
@@ -246,6 +307,7 @@ Charts.chargeBandChart = function (container, data, opts = {}) {
 
   if (!data || data.length === 0) {
     container.innerHTML = '<div class="empty-state"><p>Aucun cycle de charge détecté sur cette période.</p></div>';
+    if (container._chartControlsBar) container._chartControlsBar.style.display = 'none';
     return;
   }
 
@@ -303,6 +365,7 @@ Charts.chargeBandChart = function (container, data, opts = {}) {
   container.appendChild(svg);
   chartWindowIndicator(container, winState, windowedData.length);
   attachChartGestures(container, winState, () => Charts.chargeBandChart(container, data, opts));
+  ensureChartControls(container, winState, () => Charts.chargeBandChart(container, data, opts));
 
   if (opts.legendContainer) {
     opts.legendContainer.innerHTML = `

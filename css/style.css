@@ -1229,6 +1229,41 @@ body {
   pointer-events: none;
 }
 
+.chart-controls {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.chart-ctrl-btn {
+  width: 44px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.chart-ctrl-btn svg {
+  width: 17px;
+  height: 17px;
+}
+
+.chart-ctrl-btn:active {
+  background: var(--bg-panel);
+  color: var(--accent-amber);
+}
+
+.chart-ctrl-btn:disabled {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
 .chart-container.donut { height: 240px; }
 
 .chart-legend {
